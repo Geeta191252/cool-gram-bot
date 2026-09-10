@@ -173,10 +173,14 @@ const CATEGORIES: { key: string; label: string }[] = [
 async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
   const { data: ads } = await supabase
     .from("cg_ads")
-    .select("category")
-    .eq("is_active", true);
+    .select("id, category, reward, budget_left")
+    .eq("is_active", true)
+    .neq("owner_tg", chatId);
+  const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
+  const doneSet = new Set(((done ?? []) as any[]).map((d) => String(d.ad_id)));
   const counts: Record<string, number> = {};
   for (const a of (ads ?? []) as any[]) {
+    if (doneSet.has(String(a.id)) || a.budget_left < a.reward) continue;
     counts[a.category] = (counts[a.category] ?? 0) + 1;
   }
 
@@ -244,11 +248,15 @@ const BOT_SUBTYPES: { key: string; label: string; title: string; desc: string }[
 async function showBotSubcategories(supabase: ReturnType<typeof db>, chatId: number) {
   const { data: ads } = await supabase
     .from("cg_ads")
-    .select("subtype")
+    .select("id, subtype, reward, budget_left")
     .eq("is_active", true)
-    .eq("category", "bots");
+    .eq("category", "bots")
+    .neq("owner_tg", chatId);
+  const { data: doneB } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
+  const doneSetB = new Set(((doneB ?? []) as any[]).map((d) => String(d.ad_id)));
   const counts: Record<string, number> = {};
   for (const a of (ads ?? []) as any[]) {
+    if (doneSetB.has(String(a.id)) || a.budget_left < a.reward) continue;
     const k = a.subtype ?? "plain";
     counts[k] = (counts[k] ?? 0) + 1;
   }
@@ -292,10 +300,11 @@ async function showTask(
     if (subtype === "plain") query = query.or("subtype.is.null,subtype.eq.plain");
     else query = query.eq("subtype", subtype);
   }
-  if (doneIds.length) query = query.not("id", "in", `(${doneIds.join(",")})`);
-
   const { data: allAds } = await query;
-  const ads = ((allAds ?? []) as any[]).filter((a) => a.budget_left >= a.reward);
+  const doneSet = new Set(doneIds.map(String));
+  const ads = ((allAds ?? []) as any[]).filter(
+    (a) => a.budget_left >= a.reward && !doneSet.has(String(a.id)),
+  );
 
   if (!ads.length) {
     await send(
