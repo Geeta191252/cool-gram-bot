@@ -557,7 +557,7 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
     .update({ pending_action: `aud:${JSON.stringify({ category, title, link })}` })
     .eq("tg_id", chatId);
 
-  await showAudienceMenu(chatId, "no restrictions");
+  await showAudienceMenu(chatId, "no restrictions", 25, `back:chatpick:${category}`);
 }
 
 async function showAudienceMenu(chatId: number, current: string, extra = 25, backTo = "promo_menu") {
