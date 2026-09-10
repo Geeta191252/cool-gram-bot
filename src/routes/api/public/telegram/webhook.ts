@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { createHash, timingSafeEqual } from "crypto";
 
 const COIN = "CG";
+const INTRO_VIDEO_URL =
+  "https://project--df5c0224-0a9b-491a-a8d1-60dc4387ca37-dev.lovable.app/__l5e/assets-v1/880f3d3d-c35d-41c7-a734-8b7bd8f33503/coolgram-intro.mp4";
 const SIGNUP_BONUS = 25;
 const REFERRAL_BONUS = 50;
 
@@ -202,12 +204,17 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
   }
 
   if (text.startsWith("/start")) {
-    await send(
-      chatId,
-      `👋 <b>${from.first_name ?? "Dost"}, welcome to COOL GRAM!</b>\n\nThe Telegram promotion platform.\n\n<i>Advertising without a budget</i> — simple tasks poore karke ${COIN} kamayein aur usi se apna channel promote karein.${
-        isNew ? `\n\n🎁 Welcome bonus: <b>+${SIGNUP_BONUS} ${COIN}</b>` : ""
-      }`,
-    );
+    const caption = `👋 <b>${from.first_name ?? "friend"}, welcome to COOL GRAM!</b>\n\nThe Telegram promotion platform${
+      isNew ? `\n\n🎁 Welcome bonus: <b>+${SIGNUP_BONUS} ${COIN}</b>` : ""
+    }`;
+    const video = await tg("sendVideo", {
+      chat_id: chatId,
+      video: INTRO_VIDEO_URL,
+      caption,
+      parse_mode: "HTML",
+      reply_markup: MAIN_KEYBOARD,
+    });
+    if (!video?.ok) await send(chatId, caption);
     return;
   }
 
