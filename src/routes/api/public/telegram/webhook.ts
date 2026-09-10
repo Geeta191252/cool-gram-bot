@@ -389,6 +389,54 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+  if (data.startsWith("promo:")) {
+    const key = data.split(":")[1];
+    const type = PROMO_TYPES.find((t) => t.key === key);
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await supabase.from("cg_users").update({ pending_action: `promote:${key}` }).eq("tg_id", chatId);
+    await send(
+      chatId,
+      `${type?.label ?? "📢 Promotion"}\n\nEk line mein bhejein:\n<code>Title | Link | Reward | Budget</code>\n\nExample:\n<code>My Channel | https://t.me/mychannel | 5 | 100</code>`,
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "promo_menu" }]] } },
+    );
+    return;
+  }
+
+  if (data === "promo_menu") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+    await showPromoteMenu(supabase, chatId);
+    return;
+  }
+
+  if (data === "promo_auto") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await send(
+      chatId,
+      "⚙️ <b>Auto-task settings</b>\n\nAuto-repeat tasks jaldi aa rahe hain. Abhi aap manually campaign bana sakte hain.",
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "promo_menu" }]] } },
+    );
+    return;
+  }
+
+  if (data === "promo_mine") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const { data: mine } = await supabase
+      .from("cg_ads")
+      .select("title, reward, budget_left, is_active, category")
+      .eq("owner_tg", chatId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    const lines = (mine ?? []).map(
+      (a: any) =>
+        `${a.is_active ? "🟢" : "⚪️"} <b>${a.title}</b> · ${a.category}\n   Reward ${a.reward} ${COIN} • Left ${a.budget_left} ${COIN}`,
+    );
+    await send(chatId, `📋 <b>My Tasks</b>\n\n${lines.length ? lines.join("\n") : "Abhi koi campaign nahi hai."}`, {
+      reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "promo_menu" }]] },
+    });
+    return;
+  }
+
   if (data.startsWith("cat:") || data.startsWith("next:")) {
     const category = data.split(":")[1] || undefined;
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
