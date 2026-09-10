@@ -211,7 +211,13 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
   const { user, isNew } = await getUser(supabase, from, startPayload);
   const bot = await botUsername();
 
-  if (user?.pending_action === "promote" && !text.startsWith("/")) {
+  const isMenu = MAIN_KEYBOARD.keyboard.flat().some((b) => b.text === text);
+  if (isMenu && user?.pending_action) {
+    await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+    (user as any).pending_action = null;
+  }
+
+  if (user?.pending_action === "promote" && !isMenu && !text.startsWith("/")) {
     const parts = text.split("|").map((p) => p.trim());
     const [title, link, rewardRaw, budgetRaw] = parts;
     const reward = Number(rewardRaw);
