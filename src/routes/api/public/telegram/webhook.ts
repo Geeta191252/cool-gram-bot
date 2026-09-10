@@ -188,7 +188,8 @@ async function showTask(supabase: ReturnType<typeof db>, chatId: number, categor
   if (!ad || ad.budget_left < ad.reward) {
     await send(
       chatId,
-      "😴 <b>Abhi koi task available nahi hai.</b>\n\nThodi der baad wapas aayein — naye tasks har roz add hote hain.",
+      "😴 <b>Is category mein abhi koi task nahi hai.</b>\n\nThodi der baad wapas aayein — naye tasks har roz add hote hain.",
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
     );
     return;
   }
@@ -198,7 +199,8 @@ async function showTask(supabase: ReturnType<typeof db>, chatId: number, categor
       inline_keyboard: [
         [{ text: "🔗 Open channel", url: ad.link }],
         [{ text: "✅ I did it", callback_data: `done:${ad.id}` }],
-        [{ text: "⏭ Skip", callback_data: "next" }],
+        [{ text: "⏭ Skip", callback_data: `next:${category ?? ""}` }],
+        [{ text: "🔙 Back", callback_data: "earn" }],
       ],
     },
   });
