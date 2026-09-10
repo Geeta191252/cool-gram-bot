@@ -453,7 +453,7 @@ async function showBotAudience(supabase: ReturnType<typeof db>, chatId: number, 
       inline_keyboard: [
         [{ text: "1️⃣ All users", callback_data: "botaud:all" }],
         [{ text: "2️⃣ Telegram Premium only", callback_data: "botaud:premium" }],
-        [{ text: "⬅️ Back", callback_data: "promo_menu" }],
+        [{ text: "⬅️ Back", callback_data: cond ? "back:botcond" : "back:bottype" }],
       ],
     },
   });
