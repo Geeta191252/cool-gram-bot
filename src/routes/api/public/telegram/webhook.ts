@@ -589,23 +589,26 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       await send(chatId, "⚠️ Sahi bot username bhejein, jaise <code>@MyCoolBot</code>.");
       return;
     }
-    await supabase
-      .from("cg_users")
-      .update({
-        pending_action: `amt:${JSON.stringify({
-          category: "bots",
-          title: `@${uname}`,
-          link: `https://t.me/${uname}`,
-        })}`,
-      })
-      .eq("tg_id", chatId);
-    await send(
-      chatId,
-      `✅ Bot selected: <b>@${uname}</b>\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
-      { reply_markup: MAIN_KEYBOARD },
-    );
+    await askBotRefLink(supabase, chatId, {
+      category: "bots",
+      title: `@${uname}`,
+      link: `https://t.me/${uname}`,
+    });
     return;
   }
+
+  if (user?.pending_action?.startsWith("botref:") && !isMenu && !text.startsWith("/")) {
+    const info = JSON.parse(user.pending_action.slice(7));
+    const ref = text.trim();
+    if (!/^https?:\/\/t\.me\/[A-Za-z0-9_]+(\?start=\S+)?$/i.test(ref)) {
+      await send(chatId, "⚠️ Sahi referral link bhejein, jaise <code>https://t.me/gram_piarbot?start=123456789</code>.");
+      return;
+    }
+    info.ref_link = ref;
+    await showBotTaskType(supabase, chatId, info);
+    return;
+  }
+
 
   if (user?.pending_action === "reactlink" && !isMenu && !text.startsWith("/")) {
     const link = text.trim();
