@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "asset_id": "880f3d3d-c35d-41c7-a734-8b7bd8f33503",
+  "asset_id": "44cc983b-29b2-4358-a478-976fbd96ea23",
   "project_id": "df5c0224-0a9b-491a-a8d1-60dc4387ca37",
-  "url": "/__l5e/assets-v1/880f3d3d-c35d-41c7-a734-8b7bd8f33503/coolgram-intro.mp4",
-  "r2_key": "a/v1/df5c0224-0a9b-491a-a8d1-60dc4387ca37/880f3d3d-c35d-41c7-a734-8b7bd8f33503/coolgram-intro.mp4",
-  "original_filename": "coolgram-intro.mp4",
-  "size": 700345,
+  "url": "/__l5e/assets-v1/44cc983b-29b2-4358-a478-976fbd96ea23/coolgram-intro-v2.mp4",
+  "r2_key": "a/v1/df5c0224-0a9b-491a-a8d1-60dc4387ca37/44cc983b-29b2-4358-a478-976fbd96ea23/coolgram-intro-v2.mp4",
+  "original_filename": "coolgram-intro-v2.mp4",
+  "size": 256976,
   "content_type": "video/mp4",
-  "created_at": "2026-09-10T11:06:42Z"
+  "created_at": "2026-09-10T11:09:54Z"
 }
