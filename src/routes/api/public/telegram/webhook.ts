@@ -398,6 +398,33 @@ async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: numb
     return;
   }
   const title = originChat.title ?? "Post";
+
+  // Bot ko us channel mein admin hona chahiye
+  const me = await tg("getMe", {});
+  const botId = me?.result?.id;
+  const botUsername = me?.result?.username;
+  const member = await tg("getChatMember", { chat_id: originChat.id, user_id: botId });
+  const status = member?.result?.status;
+  if (status !== "administrator" && status !== "creator") {
+    await tg("sendMessage", {
+      chat_id: chatId,
+      text: `⛔️ <b>The bot lacks admin rights.</b>\nAdd the bot to the channel and try again.`,
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "➕ Add bot to channel",
+              url: `https://t.me/${botUsername}?startchannel=true&admin=post_messages+edit_messages+invite_users`,
+            },
+          ],
+        ],
+      },
+    });
+    await askForwardPost(supabase, chatId);
+    return;
+  }
+
   const link = originChat.username
     ? `https://t.me/${originChat.username}/${msgId}`
     : `https://t.me/c/${String(originChat.id).replace("-100", "")}/${msgId}`;
@@ -413,6 +440,7 @@ async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: numb
     { reply_markup: MAIN_KEYBOARD },
   );
 }
+
 
 async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number, shared: any) {
   const { data: u } = await supabase
@@ -439,7 +467,7 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
 async function showAudienceMenu(chatId: number, current: string) {
   await send(
     chatId,
-    `🎯 <b>Task audience</b>\nCurrent: ${current}\n\nChoose who can access the task:\n💡 The audience filter adds <b>+100 ${COIN}</b> to the min. price per completion.`,
+    `🎯 <b>Task audience</b>\nCurrent: ${current}\n\nChoose who can access the task:\n💡 The audience filter adds <b>+25 ${COIN}</b> to the min. price per completion.`,
     {
       reply_markup: {
         inline_keyboard: [
