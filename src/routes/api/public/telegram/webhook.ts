@@ -664,7 +664,7 @@ async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: numb
   await supabase
     .from("cg_users")
     .update({
-      pending_action: `aud:${JSON.stringify({ category: "views", title, link, base_min_price: 25 })}`,
+      pending_action: `aud:${JSON.stringify({ category: "views", title, link, base_min_price: 25, src_chat: originChat.id, src_msg: msgId })}`,
     })
     .eq("tg_id", chatId);
 
