@@ -660,6 +660,78 @@ async function askPrice(supabase: ReturnType<typeof db>, chatId: number, info: a
   );
 }
 
+const COMMISSION = 0.15;
+
+function unitCost(price: number) {
+  return Math.ceil(price * (1 + COMMISSION));
+}
+
+async function askCount(
+  supabase: ReturnType<typeof db>,
+  chatId: number,
+  info: any,
+  balance: number,
+) {
+  const price = Number(info.reward);
+  const max = Math.floor(balance / unitCost(price));
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `bud:${JSON.stringify(info)}` })
+    .eq("tg_id", chatId);
+  const rows: any[] = [];
+  if (max >= 1) {
+    rows.push([{ text: `${max.toLocaleString("en-US")} (Maximum for your balance)`, callback_data: "cnt_max" }]);
+  }
+  rows.push([{ text: "⬅️ Back", callback_data: "aud_back" }]);
+  await send(
+    chatId,
+    `ℹ️ <b>Task creation commission — 15%.</b>\n\n` +
+      `<blockquote>💲 ${info.category === "bots" ? "Bot launch price" : "Task price"} — ${price.toLocaleString("en-US")} ${COIN}\n` +
+      `💰 Your balance — ${balance.toLocaleString("en-US")} ${COIN}</blockquote>\n\n` +
+      `📝 <b>Enter the number of completions or choose:</b>`,
+    { reply_markup: { inline_keyboard: rows } },
+  );
+}
+
+async function createCampaign(
+  supabase: ReturnType<typeof db>,
+  chatId: number,
+  info: any,
+  count: number,
+  balance: number,
+) {
+  const reward = Number(info.reward);
+  const total = unitCost(reward) * count;
+  if (balance < total) {
+    await send(
+      chatId,
+      `❌ Balance kam hai. Chahiye <b>${total.toLocaleString("en-US")} ${COIN}</b>, aapke paas <b>${balance.toLocaleString("en-US")} ${COIN}</b> hain.`,
+    );
+    return;
+  }
+  await supabase.from("cg_ads").insert({
+    owner_tg: chatId,
+    title: info.title ?? "Promotion",
+    link: info.link ?? "",
+    reward,
+    budget_left: reward * count,
+    category: info.category,
+  });
+  await supabase
+    .from("cg_users")
+    .update({ balance: balance - total, pending_action: null })
+    .eq("tg_id", chatId);
+  await supabase
+    .from("cg_transactions")
+    .insert({ tg_id: chatId, amount: -total, reason: `Promotion: ${info.title ?? info.category}` });
+  await send(
+    chatId,
+    `🚀 <b>Campaign live hai!</b>\n\n${info.title ?? ""}\nPrice: ${reward.toLocaleString("en-US")} ${COIN} × ${count}\nTotal (incl. 15%): ${total.toLocaleString("en-US")} ${COIN}\nAudience: ${info.audience ?? "no restrictions"}`,
+    { reply_markup: MAIN_KEYBOARD },
+  );
+}
+
+
 
 async function askAmount(supabase: ReturnType<typeof db>, chatId: number, info: any) {
   await supabase
@@ -773,51 +845,23 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       return;
     }
     info.reward = price;
-    await supabase
-      .from("cg_users")
-      .update({ pending_action: `bud:${JSON.stringify(info)}` })
-      .eq("tg_id", chatId);
-    await send(
-      chatId,
-      `💰 <b>Set your budget</b>\nPrice per completion: <b>${price.toLocaleString("en-US")} ${COIN}</b>\nBalance: <b>${user.balance} ${COIN}</b>\n\nBudget bhejein (sirf number).`,
-    );
+    await askCount(supabase, chatId, info, Number(user.balance));
     return;
   }
 
   if (user?.pending_action?.startsWith("bud:") && !isMenu && !text.startsWith("/")) {
     const info = JSON.parse(user.pending_action.slice(4));
-    const budget = Number(text.replace(/[,\s]/g, ""));
+    const count = Number(text.replace(/[,\s]/g, ""));
     const reward = Number(info.reward);
-    if (!budget || budget < reward) {
-      await send(chatId, `⚠️ Budget kam se kam ${reward.toLocaleString("en-US")} ${COIN} hona chahiye.`);
+    if (!count || count < 1 || !Number.isInteger(count)) {
+      await send(chatId, "⚠️ Completions ki sankhya (sirf number) bhejein, jaise <code>10</code>.");
       return;
     }
-    if (user.balance < budget) {
-      await send(chatId, `❌ Balance kam hai. Aapke paas <b>${user.balance} ${COIN}</b> hain.`);
-      return;
-    }
-    await supabase.from("cg_ads").insert({
-      owner_tg: chatId,
-      title: info.title ?? "Promotion",
-      link: info.link ?? "",
-      reward,
-      budget_left: budget,
-      category: info.category,
-    });
-    await supabase
-      .from("cg_users")
-      .update({ balance: user.balance - budget, pending_action: null })
-      .eq("tg_id", chatId);
-    await supabase
-      .from("cg_transactions")
-      .insert({ tg_id: chatId, amount: -budget, reason: `Promotion: ${info.title ?? info.category}` });
-    await send(
-      chatId,
-      `🚀 <b>Campaign live hai!</b>\n\n${info.title ?? ""}\nReward: ${reward} ${COIN} • Budget: ${budget} ${COIN}\nAudience: ${info.audience ?? "no restrictions"}`,
-      { reply_markup: MAIN_KEYBOARD },
-    );
+    await createCampaign(supabase, chatId, info, count, Number(user.balance));
     return;
   }
+
+
 
 
   if (user?.pending_action?.startsWith("amt:") && !isMenu && !text.startsWith("/")) {
@@ -1125,6 +1169,26 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
 
   }
+
+  if (data === "cnt_max") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const info = await getPendingInfo(supabase, chatId, "bud");
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", chatId)
+      .maybeSingle();
+    const balance = Number((u as any)?.balance ?? 0);
+    if (!info) return;
+    const max = Math.floor(balance / unitCost(Number(info.reward)));
+    if (max < 1) {
+      await send(chatId, "❌ Balance kam hai.");
+      return;
+    }
+    await createCampaign(supabase, chatId, info, max, balance);
+    return;
+  }
+
 
   if (data === "aud_back") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
