@@ -773,51 +773,23 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       return;
     }
     info.reward = price;
-    await supabase
-      .from("cg_users")
-      .update({ pending_action: `bud:${JSON.stringify(info)}` })
-      .eq("tg_id", chatId);
-    await send(
-      chatId,
-      `💰 <b>Set your budget</b>\nPrice per completion: <b>${price.toLocaleString("en-US")} ${COIN}</b>\nBalance: <b>${user.balance} ${COIN}</b>\n\nBudget bhejein (sirf number).`,
-    );
+    await askCount(supabase, chatId, info, Number(user.balance));
     return;
   }
 
   if (user?.pending_action?.startsWith("bud:") && !isMenu && !text.startsWith("/")) {
     const info = JSON.parse(user.pending_action.slice(4));
-    const budget = Number(text.replace(/[,\s]/g, ""));
+    const count = Number(text.replace(/[,\s]/g, ""));
     const reward = Number(info.reward);
-    if (!budget || budget < reward) {
-      await send(chatId, `⚠️ Budget kam se kam ${reward.toLocaleString("en-US")} ${COIN} hona chahiye.`);
+    if (!count || count < 1 || !Number.isInteger(count)) {
+      await send(chatId, "⚠️ Completions ki sankhya (sirf number) bhejein, jaise <code>10</code>.");
       return;
     }
-    if (user.balance < budget) {
-      await send(chatId, `❌ Balance kam hai. Aapke paas <b>${user.balance} ${COIN}</b> hain.`);
-      return;
-    }
-    await supabase.from("cg_ads").insert({
-      owner_tg: chatId,
-      title: info.title ?? "Promotion",
-      link: info.link ?? "",
-      reward,
-      budget_left: budget,
-      category: info.category,
-    });
-    await supabase
-      .from("cg_users")
-      .update({ balance: user.balance - budget, pending_action: null })
-      .eq("tg_id", chatId);
-    await supabase
-      .from("cg_transactions")
-      .insert({ tg_id: chatId, amount: -budget, reason: `Promotion: ${info.title ?? info.category}` });
-    await send(
-      chatId,
-      `🚀 <b>Campaign live hai!</b>\n\n${info.title ?? ""}\nReward: ${reward} ${COIN} • Budget: ${budget} ${COIN}\nAudience: ${info.audience ?? "no restrictions"}`,
-      { reply_markup: MAIN_KEYBOARD },
-    );
+    await createCampaign(supabase, chatId, info, count, Number(user.balance));
     return;
   }
+
+
 
 
   if (user?.pending_action?.startsWith("amt:") && !isMenu && !text.startsWith("/")) {
