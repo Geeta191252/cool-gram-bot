@@ -715,7 +715,7 @@ async function createCampaign(
   if (balance < total) {
     await send(
       chatId,
-      `❌ Balance kam hai. Chahiye <b>${total.toLocaleString("en-US")} ${COIN}</b>, aapke paas <b>${balance.toLocaleString("en-US")} ${COIN}</b> hain.`,
+      `❌ Insufficient balance. Required <b>${total.toLocaleString("en-US")} ${COIN}</b>, you have <b>${balance.toLocaleString("en-US")} ${COIN}</b>.`,
     );
     return;
   }
@@ -888,7 +888,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       return;
     }
     if (user.balance < budget) {
-      await send(chatId, `❌ Balance kam hai. Aapke paas <b>${user.balance} ${COIN}</b> hain.`);
+      await send(chatId, `❌ Insufficient balance. You have <b>${user.balance} ${COIN}</b>.`);
       return;
     }
     await supabase.from("cg_ads").insert({
@@ -924,7 +924,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       return;
     }
     if (user.balance < budget) {
-      await send(chatId, `❌ Balance kam hai. Aapke paas <b>${user.balance} ${COIN}</b> hain, chahiye <b>${budget} ${COIN}</b>.`);
+      await send(chatId, `❌ Insufficient balance. You have <b>${user.balance} ${COIN}</b>, required <b>${budget} ${COIN}</b>.`);
       return;
     }
     await supabase.from("cg_ads").insert({
@@ -1206,7 +1206,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     if (!info) return;
     const max = Math.floor(balance / unitCost(Number(info.reward)));
     if (max < 1) {
-      await send(chatId, "❌ Balance kam hai.");
+      await send(chatId, "❌ Insufficient balance.");
       return;
     }
     await createCampaign(supabase, chatId, info, max, balance);
