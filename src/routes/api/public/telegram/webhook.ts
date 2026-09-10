@@ -23,7 +23,7 @@ function db() {
 }
 
 async function tg(method: string, payload: unknown) {
-  const token = process.env["COOLGRAM_BOT_TOKEN"];
+  const token = process.env["TELEGRAM_BOT_TOKEN"] ?? process.env["COOLGRAM_BOT_TOKEN"];
   const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -339,7 +339,7 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const apiKey = process.env["COOLGRAM_BOT_TOKEN"];
+        const apiKey = process.env["TELEGRAM_BOT_TOKEN"] ?? process.env["COOLGRAM_BOT_TOKEN"];
         if (!apiKey) return new Response("Not configured", { status: 500 });
 
         const expected = deriveSecret(apiKey);
