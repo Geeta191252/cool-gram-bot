@@ -636,7 +636,9 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
             const message = update.message ?? update.edited_message;
             const chatId = message?.chat?.id;
             const text = message?.text;
-            if (chatId && text) await handleText(supabase, chatId, message.from ?? {}, text.trim());
+            const shared = message?.chat_shared;
+            if (chatId && shared) await handleChatShared(supabase, chatId, shared);
+            else if (chatId && text) await handleText(supabase, chatId, message.from ?? {}, text.trim());
           }
         } catch (err) {
           console.error("Cool Gram webhook error", err);
