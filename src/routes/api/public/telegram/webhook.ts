@@ -1530,12 +1530,28 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
 
     // Promoted post ko bot chat mein bhejein (forward)
     let delivered = false;
-    if (a.src_chat && a.src_msg) {
-      const fwd = await tgRaw("forwardMessage", {
+    let fromChat: string | number | null = a.src_chat ?? null;
+    let fromMsg: number | null = a.src_msg ?? null;
+    if (!fromChat || !fromMsg) {
+      const src = parsePostLink(a.link);
+      if (src) {
+        fromChat = src.chat;
+        fromMsg = src.msg;
+      }
+    }
+    if (fromChat && fromMsg) {
+      let fwd = await tgRaw("forwardMessage", {
         chat_id: chatId,
-        from_chat_id: a.src_chat,
-        message_id: a.src_msg,
+        from_chat_id: fromChat,
+        message_id: fromMsg,
       });
+      if (!fwd?.ok) {
+        fwd = await tgRaw("copyMessage", {
+          chat_id: chatId,
+          from_chat_id: fromChat,
+          message_id: fromMsg,
+        });
+      }
       delivered = !!fwd?.ok;
     }
     if (!delivered) {
