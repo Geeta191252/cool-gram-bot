@@ -209,6 +209,8 @@ function actionVerb(category?: string) {
 }
 
 function listHeader(category?: string) {
+  if (category === "views")
+    return "To earn grams, you need to view posts, click on the buttons to view.\n\nAttention! Some posts are too long, in this case, you need to scroll it up and down.";
   if (category === "groups")
     return "⚠️ Don't leave groups earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
   if (category === "bots")
@@ -253,11 +255,21 @@ async function showTask(
   const slice = ads.slice(p * PAGE_SIZE, p * PAGE_SIZE + PAGE_SIZE);
   const verb = actionVerb(category);
   const cat = category ?? "";
+  const isViews = category === "views";
 
-  const rows: any[] = slice.map((ad) => [
-    { text: `💲 +${ad.reward.toLocaleString("en-US")} | ${verb}`, url: ad.link },
-    { text: "🔄 Check", callback_data: `done:${ad.id}` },
-  ]);
+  const rows: any[] = slice.map((ad) =>
+    isViews
+      ? [
+          {
+            text: `👁 View Post +${ad.reward.toLocaleString("en-US")} ${COIN}`,
+            callback_data: `view:${ad.id}`,
+          },
+        ]
+      : [
+          { text: `💲 +${ad.reward.toLocaleString("en-US")} | ${verb}`, url: ad.link },
+          { text: "🔄 Check", callback_data: `done:${ad.id}` },
+        ],
+  );
 
   rows.push([
     { text: "1", callback_data: `page:${cat}:0` },
@@ -266,11 +278,12 @@ async function showTask(
     { text: "▶️", callback_data: `page:${cat}:${Math.min(p + 1, totalPages - 1)}` },
     { text: `${totalPages}`, callback_data: `page:${cat}:${totalPages - 1}` },
   ]);
-  rows.push([{ text: "❌ Report", callback_data: `report:${cat}` }]);
+  if (!isViews) rows.push([{ text: "❌ Report", callback_data: `report:${cat}` }]);
   rows.push([{ text: "🔙 Back", callback_data: "earn" }]);
 
   await send(chatId, listHeader(category), { reply_markup: { inline_keyboard: rows } });
 }
+
 
 
 const PROMO_TYPES = [
@@ -1394,7 +1407,49 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
   }
 
 
+  if (data.startsWith("view:")) {
+    const adId = data.slice(5);
+    const { data: ad } = await supabase
+      .from("cg_ads")
+      .select("id, title, link, reward, budget_left, is_active, category")
+      .eq("id", adId)
+      .maybeSingle();
+    const a = ad as any;
+    if (!a || !a.is_active || a.budget_left < a.reward) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "This task is no longer available." });
+      return;
+    }
+    const { error } = await supabase.from("cg_completions").insert({ ad_id: adId, tg_id: chatId });
+    if (error) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Already completed." });
+      return;
+    }
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", chatId)
+      .maybeSingle();
+    await supabase
+      .from("cg_users")
+      .update({ balance: ((u as any)?.balance ?? 0) + a.reward })
+      .eq("tg_id", chatId);
+    await supabase.from("cg_ads").update({ budget_left: a.budget_left - a.reward }).eq("id", adId);
+    await supabase
+      .from("cg_transactions")
+      .insert({ tg_id: chatId, amount: a.reward, reason: `Task: ${a.title}` });
+    await tg("answerCallbackQuery", { callback_query_id: cb.id, text: `+${a.reward} ${COIN} 🎉` });
+    await tg("sendMessage", {
+      chat_id: chatId,
+      text: `👁 <b>Open the post</b>\n\n+${a.reward} ${COIN} credited.`,
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: [[{ text: "👁 Open post", url: a.link }]] },
+    });
+    await showTask(supabase, chatId, "views");
+    return;
+  }
+
   if (data.startsWith("done:")) {
+
     const adId = data.slice(5);
     const { data: ad } = await supabase
       .from("cg_ads")
