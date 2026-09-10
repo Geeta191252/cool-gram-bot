@@ -24,7 +24,10 @@ function db() {
   });
 }
 
-async function tg(method: string, payload: unknown) {
+// Callback ke dauraan pehla sendMessage usi message ko edit kare (naya page na aaye)
+let editCtx: { chatId: number; messageId: number; used: boolean } | null = null;
+
+async function tgRaw(method: string, payload: unknown) {
   const token = process.env["TELEGRAM_BOT_TOKEN"] ?? process.env["COOLGRAM_BOT_TOKEN"];
   const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
@@ -39,6 +42,32 @@ async function tg(method: string, payload: unknown) {
     return null;
   }
 }
+
+async function tg(method: string, payload: unknown) {
+  const p = payload as Record<string, any>;
+  if (
+    method === "sendMessage" &&
+    editCtx &&
+    !editCtx.used &&
+    p &&
+    p["chat_id"] === editCtx.chatId &&
+    (!p["reply_markup"] || p["reply_markup"]?.inline_keyboard)
+  ) {
+    editCtx.used = true;
+    const edited = await tgRaw("editMessageText", {
+      chat_id: editCtx.chatId,
+      message_id: editCtx.messageId,
+      text: p["text"],
+      parse_mode: p["parse_mode"],
+      link_preview_options: p["link_preview_options"] ?? { is_disabled: true },
+      reply_markup: p["reply_markup"] ?? { inline_keyboard: [] },
+    });
+    if (edited?.ok) return edited;
+    // edit fail (e.g. video/photo message) -> normal send
+  }
+  return tgRaw(method, payload);
+}
+
 
 
 const MAIN_KEYBOARD = {
@@ -946,8 +975,21 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
 }
 
 async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
+  const msgId = cb.message?.message_id as number | undefined;
+  const cid = cb.message?.chat?.id as number | undefined;
+  const isText = typeof cb.message?.text === "string";
+  editCtx = cid && msgId && isText ? { chatId: cid, messageId: msgId, used: false } : null;
+  try {
+    await handleCallbackInner(supabase, cb);
+  } finally {
+    editCtx = null;
+  }
+}
+
+async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
   const chatId = cb.message?.chat?.id as number;
   const data = String(cb.data ?? "");
+
 
   if (data === "earn" || data === "back") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
