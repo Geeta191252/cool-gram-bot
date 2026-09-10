@@ -548,6 +548,10 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
       await askForwardPost(supabase, chatId);
       return;
     }
+    if (key === "bots") {
+      await showBotPromoInfo(supabase, chatId);
+      return;
+    }
     if (key === "channels" || key === "groups" || key === "boost" || key === "reactions") {
       await askChatPicker(supabase, chatId, key, key !== "groups");
       return;
