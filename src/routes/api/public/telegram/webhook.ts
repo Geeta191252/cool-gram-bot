@@ -240,6 +240,76 @@ async function showPromoteMenu(supabase: ReturnType<typeof db>, chatId: number) 
   });
 }
 
+async function askChatPicker(
+  supabase: ReturnType<typeof db>,
+  chatId: number,
+  category: string,
+  isChannel: boolean,
+) {
+  await supabase.from("cg_users").update({ pending_action: `pick:${category}` }).eq("tg_id", chatId);
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text: `📣 <b>Choose a chat or ${isChannel ? "channel" : "group"} to promote</b> (the bot must be an admin)`,
+    parse_mode: "HTML",
+    reply_markup: {
+      keyboard: [
+        [
+          {
+            text: "🏠 I'm an admin",
+            request_chat: {
+              request_id: 1,
+              chat_is_channel: isChannel,
+              request_title: true,
+              request_username: true,
+              user_administrator_rights: { is_anonymous: false, can_invite_users: true },
+            },
+          },
+        ],
+        [
+          {
+            text: "🌐 I'm not an admin",
+            request_chat: {
+              request_id: 2,
+              chat_is_channel: isChannel,
+              request_title: true,
+              request_username: true,
+            },
+          },
+        ],
+        [{ text: "🔙 Back" }],
+      ],
+      resize_keyboard: true,
+      one_time_keyboard: true,
+    },
+  });
+}
+
+async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number, shared: any) {
+  const { data: u } = await supabase
+    .from("cg_users")
+    .select("pending_action")
+    .eq("tg_id", chatId)
+    .maybeSingle();
+  const pending = (u as any)?.pending_action as string | null;
+  const category = pending?.startsWith("pick:") ? pending.slice(5) : "channels";
+
+  const title = shared.title ?? "My channel";
+  const link = shared.username
+    ? `https://t.me/${shared.username}`
+    : `https://t.me/c/${String(shared.chat_id).replace("-100", "")}`;
+
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `amt:${JSON.stringify({ category, title, link })}` })
+    .eq("tg_id", chatId);
+
+  await send(
+    chatId,
+    `✅ Selected: <b>${title}</b>\n${link}\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
+    { reply_markup: MAIN_KEYBOARD },
+  );
+}
+
 async function handleText(supabase: ReturnType<typeof db>, chatId: number, from: any, text: string) {
   const startPayload = text.startsWith("/start") ? text.split(" ")[1] : undefined;
   const { user, isNew } = await getUser(supabase, from, startPayload);
