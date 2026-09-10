@@ -536,10 +536,10 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
   await showAudienceMenu(chatId, "no restrictions");
 }
 
-async function showAudienceMenu(chatId: number, current: string) {
+async function showAudienceMenu(chatId: number, current: string, extra = 25) {
   await send(
     chatId,
-    `🎯 <b>Task audience</b>\nCurrent: ${current}\n\nChoose who can access the task:\n💡 The audience filter adds <b>+25 ${COIN}</b> to the min. price per completion.`,
+    `🎯 <b>Task audience</b>\nCurrent: ${current}\n\nChoose who can access the task:\n💡 The audience filter adds <b>+${extra} ${COIN}</b> to the min. price per completion.`,
     {
       reply_markup: {
         inline_keyboard: [
@@ -883,7 +883,11 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
     const isPremium = data.split(":")[1] === "premium";
     info.audience = isPremium ? "Telegram Premium only" : "All users";
     info.min_price = isPremium ? 1400 : 900;
-    await askAmount(supabase, chatId, info);
+    await supabase
+      .from("cg_users")
+      .update({ pending_action: `aud:${JSON.stringify(info)}` })
+      .eq("tg_id", chatId);
+    await showAudienceMenu(chatId, "no restrictions", 100);
     return;
   }
 
