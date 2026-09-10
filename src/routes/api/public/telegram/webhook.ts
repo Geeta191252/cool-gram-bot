@@ -1491,7 +1491,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const adId = data.slice(5);
     const { data: ad } = await supabase
       .from("cg_ads")
-      .select("id, title, link, reward, budget_left, is_active, category")
+      .select("id, title, link, reward, budget_left, is_active, category, src_chat, src_msg")
       .eq("id", adId)
       .maybeSingle();
     const a = ad as any;
