@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { createHash, timingSafeEqual } from "crypto";
 
 const COIN = "CG";
+const INTRO_VIDEO_URL =
+  "https://project--df5c0224-0a9b-491a-a8d1-60dc4387ca37-dev.lovable.app/__l5e/assets-v1/880f3d3d-c35d-41c7-a734-8b7bd8f33503/coolgram-intro.mp4";
 const SIGNUP_BONUS = 25;
 const REFERRAL_BONUS = 50;
 
