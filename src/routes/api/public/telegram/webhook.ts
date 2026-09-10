@@ -430,15 +430,40 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
 
   await supabase
     .from("cg_users")
-    .update({ pending_action: `amt:${JSON.stringify({ category, title, link })}` })
+    .update({ pending_action: `aud:${JSON.stringify({ category, title, link })}` })
     .eq("tg_id", chatId);
 
+  await showAudienceMenu(chatId, "no restrictions");
+}
+
+async function showAudienceMenu(chatId: number, current: string) {
   await send(
     chatId,
-    `✅ Selected: <b>${title}</b>\n${link}\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
+    `🎯 <b>Task audience</b>\nCurrent: ${current}\n\nChoose who can access the task:\n💡 The audience filter adds <b>+100 ${COIN}</b> to the min. price per completion.`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "🌐 Allow all", callback_data: "aud_all" }],
+          [{ text: "🎯 Select audience", callback_data: "aud_pick" }],
+          [{ text: "🔙 Back", callback_data: "promo_menu" }],
+        ],
+      },
+    },
+  );
+}
+
+async function askAmount(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `amt:${JSON.stringify(info)}` })
+    .eq("tg_id", chatId);
+  await send(
+    chatId,
+    `✅ Selected: <b>${info.title}</b>\n${info.link}\n\nAudience: <b>${info.audience ?? "no restrictions"}</b>\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
     { reply_markup: MAIN_KEYBOARD },
   );
 }
+
 
 async function handleText(supabase: ReturnType<typeof db>, chatId: number, from: any, text: string) {
   const startPayload = text.startsWith("/start") ? text.split(" ")[1] : undefined;
