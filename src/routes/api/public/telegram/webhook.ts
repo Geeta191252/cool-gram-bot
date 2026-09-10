@@ -850,6 +850,43 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+  if (data === "botref_skip") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const info = await getPendingInfo(supabase, chatId, "botref");
+    if (!info) {
+      await showPromoteMenu(supabase, chatId);
+      return;
+    }
+    await showBotTaskType(supabase, chatId, info);
+    return;
+  }
+
+  if (data.startsWith("bottype:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const info = await getPendingInfo(supabase, chatId, "bottype");
+    if (!info) {
+      await showPromoteMenu(supabase, chatId);
+      return;
+    }
+    info.task_type = data.split(":")[1] === "start" ? "Bot start only" : "With additional conditions";
+    await showBotAudience(supabase, chatId, info);
+    return;
+  }
+
+  if (data.startsWith("botaud:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const info = await getPendingInfo(supabase, chatId, "botaud");
+    if (!info) {
+      await showPromoteMenu(supabase, chatId);
+      return;
+    }
+    const isPremium = data.split(":")[1] === "premium";
+    info.audience = isPremium ? "Telegram Premium only" : "All users";
+    info.min_price = isPremium ? 1400 : 900;
+    await askAmount(supabase, chatId, info);
+    return;
+  }
+
   if (data === "aud_all" || data === "aud_pick" || data.startsWith("aud_set:")) {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     const { data: u } = await supabase
