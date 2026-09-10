@@ -260,10 +260,10 @@ async function showBotSubcategories(supabase: ReturnType<typeof db>, chatId: num
     reply_markup: {
       inline_keyboard: [
         [
-          { text: BOT_SUBTYPES[0].label, callback_data: "botcat:plain" },
-          { text: BOT_SUBTYPES[1].label, callback_data: "botcat:webapp" },
+          { text: BOT_SUBTYPES[0]!.label, callback_data: "botcat:plain" },
+          { text: BOT_SUBTYPES[1]!.label, callback_data: "botcat:webapp" },
         ],
-        [{ text: BOT_SUBTYPES[2].label, callback_data: "botcat:cond" }],
+        [{ text: BOT_SUBTYPES[2]!.label, callback_data: "botcat:cond" }],
         [{ text: "🔙 Back", callback_data: "earn" }],
       ],
     },
