@@ -24,6 +24,8 @@ export type Database = {
           link: string
           owner_tg: number
           reward: number
+          src_chat: number | null
+          src_msg: number | null
           subtype: string | null
           title: string
         }
@@ -36,6 +38,8 @@ export type Database = {
           link: string
           owner_tg: number
           reward?: number
+          src_chat?: number | null
+          src_msg?: number | null
           subtype?: string | null
           title: string
         }
@@ -48,6 +52,8 @@ export type Database = {
           link?: string
           owner_tg?: number
           reward?: number
+          src_chat?: number | null
+          src_msg?: number | null
           subtype?: string | null
           title?: string
         }
