@@ -1,0 +1,1 @@
+ALTER TABLE public.cg_ads ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'channels';
