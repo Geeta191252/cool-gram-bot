@@ -391,7 +391,7 @@ async function askBotRefLink(supabase: ReturnType<typeof db>, chatId: number, in
     reply_markup: {
       inline_keyboard: [
         [{ text: "➡️ Skip", callback_data: "botref_skip" }],
-        [{ text: "⬅️ Back", callback_data: "promo_menu" }],
+        [{ text: "⬅️ Back", callback_data: "back:botpick" }],
       ],
     },
   });
@@ -412,7 +412,7 @@ async function showBotTaskType(supabase: ReturnType<typeof db>, chatId: number, 
           { text: "▶️ Bot start only", callback_data: "bottype:start" },
           { text: "📝 With additional conditions", callback_data: "bottype:cond" },
         ],
-        [{ text: "⬅️ Back", callback_data: "promo_menu" }],
+        [{ text: "⬅️ Back", callback_data: "back:botref" }],
       ],
     },
   });
@@ -434,7 +434,7 @@ async function askBotConditions(supabase: ReturnType<typeof db>, chatId: number,
       "No more than 400 characters.",
     parse_mode: "HTML",
     link_preview_options: { is_disabled: true },
-    reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "promo_menu" }]] },
+    reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "back:bottype" }]] },
   });
 }
 
@@ -453,7 +453,7 @@ async function showBotAudience(supabase: ReturnType<typeof db>, chatId: number, 
       inline_keyboard: [
         [{ text: "1️⃣ All users", callback_data: "botaud:all" }],
         [{ text: "2️⃣ Telegram Premium only", callback_data: "botaud:premium" }],
-        [{ text: "⬅️ Back", callback_data: "promo_menu" }],
+        [{ text: "⬅️ Back", callback_data: cond ? "back:botcond" : "back:bottype" }],
       ],
     },
   });
@@ -557,10 +557,10 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
     .update({ pending_action: `aud:${JSON.stringify({ category, title, link })}` })
     .eq("tg_id", chatId);
 
-  await showAudienceMenu(chatId, "no restrictions");
+  await showAudienceMenu(chatId, "no restrictions", 25, `back:chatpick:${category}`);
 }
 
-async function showAudienceMenu(chatId: number, current: string, extra = 25) {
+async function showAudienceMenu(chatId: number, current: string, extra = 25, backTo = "promo_menu") {
   await send(
     chatId,
     `🎯 <b>Task audience</b>\nCurrent: ${current}\n\nChoose who can access the task:\n💡 The audience filter adds <b>+${extra} ${COIN}</b> to the min. price per completion.`,
@@ -569,7 +569,7 @@ async function showAudienceMenu(chatId: number, current: string, extra = 25) {
         inline_keyboard: [
           [{ text: "🌐 Allow all", callback_data: "aud_all" }],
           [{ text: "🎯 Select audience", callback_data: "aud_pick" }],
-          [{ text: "🔙 Back", callback_data: "promo_menu" }],
+          [{ text: "🔙 Back", callback_data: backTo }],
         ],
       },
     },
@@ -600,8 +600,13 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     (user as any).pending_action = null;
   }
 
-  if (text === "🔙 Back" || text === "🏠 Main menu") {
+  if (text === "🔙 Back" || text === "⬅️ Back" || text === "🏠 Main menu") {
+    const prev = (user as any)?.pending_action as string | null;
     await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+    if (text !== "🏠 Main menu" && prev === "botlink") {
+      await showBotPromoInfo(supabase, chatId);
+      return;
+    }
     await showPromoteMenu(supabase, chatId);
     return;
   }
@@ -930,7 +935,7 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
       .from("cg_users")
       .update({ pending_action: `aud:${JSON.stringify(info)}` })
       .eq("tg_id", chatId);
-    await showAudienceMenu(chatId, "no restrictions", cond ? 300 : 100);
+    await showAudienceMenu(chatId, "no restrictions", cond ? 300 : 100, "back:botaud");
 
     return;
   }
@@ -968,7 +973,61 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
 
   if (data === "aud_back") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    await showAudienceMenu(chatId, "no restrictions");
+    const info = await getPendingInfo(supabase, chatId, "aud");
+    const cond = Boolean(info?.conditions);
+    const backTo =
+      info?.category === "bots" ? "back:botaud" : `back:chatpick:${info?.category ?? "channels"}`;
+    await showAudienceMenu(chatId, "no restrictions", info?.category === "bots" ? (cond ? 300 : 100) : 25, backTo);
+    return;
+  }
+
+  // Step-by-step back navigation (ek step peeche)
+  if (data.startsWith("back:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const step = data.slice(5);
+
+    if (step === "botpick") {
+      await askBotLink(supabase, chatId);
+      return;
+    }
+    if (step === "botinfo") {
+      await showBotPromoInfo(supabase, chatId);
+      return;
+    }
+    if (step.startsWith("chatpick:")) {
+      const category = step.split(":")[1] || "channels";
+      await askChatPicker(supabase, chatId, category, category !== "groups");
+      return;
+    }
+
+    // In steps ke liye pehle wale screen ka data chahiye
+    const current =
+      (await getPendingInfo(supabase, chatId, "aud")) ??
+      (await getPendingInfo(supabase, chatId, "botaud")) ??
+      (await getPendingInfo(supabase, chatId, "botcond")) ??
+      (await getPendingInfo(supabase, chatId, "bottype")) ??
+      (await getPendingInfo(supabase, chatId, "botref"));
+    if (!current) {
+      await showPromoteMenu(supabase, chatId);
+      return;
+    }
+    if (step === "botref") {
+      await askBotRefLink(supabase, chatId, current);
+      return;
+    }
+    if (step === "bottype") {
+      await showBotTaskType(supabase, chatId, current);
+      return;
+    }
+    if (step === "botcond") {
+      await askBotConditions(supabase, chatId, current);
+      return;
+    }
+    if (step === "botaud") {
+      await showBotAudience(supabase, chatId, current);
+      return;
+    }
+    await showPromoteMenu(supabase, chatId);
     return;
   }
 
