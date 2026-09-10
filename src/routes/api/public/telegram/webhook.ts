@@ -132,7 +132,43 @@ async function getUser(supabase: ReturnType<typeof db>, from: any, startPayload?
   return { user: created as unknown as CgUser, isNew: true };
 }
 
-async function showTask(supabase: ReturnType<typeof db>, chatId: number) {
+const CATEGORIES: { key: string; label: string }[] = [
+  { key: "channels", label: "📢 Channels" },
+  { key: "groups", label: "👥 Groups" },
+  { key: "views", label: "👁 Views" },
+  { key: "bots", label: "🤖 Bots" },
+  { key: "reactions", label: "🤍 Reactions" },
+  { key: "boost", label: "⚡️ Boost" },
+];
+
+async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
+  const { data: ads } = await supabase
+    .from("cg_ads")
+    .select("category")
+    .eq("is_active", true);
+  const counts: Record<string, number> = {};
+  for (const a of (ads ?? []) as any[]) {
+    counts[a.category] = (counts[a.category] ?? 0) + 1;
+  }
+
+  const rows: any[] = [];
+  for (let i = 0; i < CATEGORIES.length; i += 2) {
+    rows.push(
+      CATEGORIES.slice(i, i + 2).map((c) => ({
+        text: `${c.label} · ${counts[c.key] ?? 0}`,
+        callback_data: `cat:${c.key}`,
+      })),
+    );
+  }
+  rows.push([{ text: "📝 Rules", callback_data: "rules" }]);
+  rows.push([{ text: "🔙 Back", callback_data: "back" }]);
+
+  await send(chatId, "📝 <b>Choose a task category to earn</b>", {
+    reply_markup: { inline_keyboard: rows },
+  });
+}
+
+async function showTask(supabase: ReturnType<typeof db>, chatId: number, category?: string) {
   const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
   const doneIds = (done ?? []).map((d: any) => d.ad_id);
 
@@ -143,6 +179,7 @@ async function showTask(supabase: ReturnType<typeof db>, chatId: number) {
     .neq("owner_tg", chatId)
     .order("created_at", { ascending: true })
     .limit(1);
+  if (category) query = query.eq("category", category);
   if (doneIds.length) query = query.not("id", "in", `(${doneIds.join(",")})`);
 
   const { data: ads } = await query;
@@ -151,7 +188,8 @@ async function showTask(supabase: ReturnType<typeof db>, chatId: number) {
   if (!ad || ad.budget_left < ad.reward) {
     await send(
       chatId,
-      "😴 <b>Abhi koi task available nahi hai.</b>\n\nThodi der baad wapas aayein — naye tasks har roz add hote hain.",
+      "😴 <b>Is category mein abhi koi task nahi hai.</b>\n\nThodi der baad wapas aayein — naye tasks har roz add hote hain.",
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
     );
     return;
   }
@@ -161,7 +199,8 @@ async function showTask(supabase: ReturnType<typeof db>, chatId: number) {
       inline_keyboard: [
         [{ text: "🔗 Open channel", url: ad.link }],
         [{ text: "✅ I did it", callback_data: `done:${ad.id}` }],
-        [{ text: "⏭ Skip", callback_data: "next" }],
+        [{ text: "⏭ Skip", callback_data: `next:${category ?? ""}` }],
+        [{ text: "🔙 Back", callback_data: "earn" }],
       ],
     },
   });
@@ -220,7 +259,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
 
   switch (text) {
     case "💰 Earnings":
-      await showTask(supabase, chatId);
+      await showCategories(supabase, chatId);
       return;
     case "📢 Promote":
       await supabase.from("cg_users").update({ pending_action: "promote" }).eq("tg_id", chatId);
@@ -292,9 +331,30 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
   const chatId = cb.message?.chat?.id as number;
   const data = String(cb.data ?? "");
 
-  if (data === "next") {
+  if (data === "earn" || data === "back") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    await showTask(supabase, chatId);
+    if (data === "back") {
+      await send(chatId, "🏠 Main menu", { reply_markup: MAIN_KEYBOARD });
+    } else {
+      await showCategories(supabase, chatId);
+    }
+    return;
+  }
+
+  if (data === "rules") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await send(
+      chatId,
+      `📝 <b>Rules</b>\n\n1️⃣ Task khol kar channel/group join karein, phir "I did it" dabayein.\n2️⃣ Join karne ke baad turant leave na karein.\n3️⃣ Ek task sirf ek baar count hota hai.\n4️⃣ Cheating par balance zero ho sakta hai.`,
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
+    );
+    return;
+  }
+
+  if (data.startsWith("cat:") || data.startsWith("next:")) {
+    const category = data.split(":")[1] || undefined;
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await showTask(supabase, chatId, category);
     return;
   }
 

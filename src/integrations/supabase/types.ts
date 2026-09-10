@@ -17,6 +17,7 @@ export type Database = {
       cg_ads: {
         Row: {
           budget_left: number
+          category: string
           created_at: string
           id: string
           is_active: boolean
@@ -27,6 +28,7 @@ export type Database = {
         }
         Insert: {
           budget_left?: number
+          category?: string
           created_at?: string
           id?: string
           is_active?: boolean
@@ -37,6 +39,7 @@ export type Database = {
         }
         Update: {
           budget_left?: number
+          category?: string
           created_at?: string
           id?: string
           is_active?: boolean
