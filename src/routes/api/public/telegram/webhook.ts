@@ -43,6 +43,15 @@ async function tgRaw(method: string, payload: unknown) {
   }
 }
 
+function parsePostLink(link: string | null): { chat: string | number; msg: number } | null {
+  if (!link) return null;
+  const priv = link.match(/t\.me\/c\/(\d+)\/(\d+)/);
+  if (priv) return { chat: Number(`-100${priv[1]}`), msg: Number(priv[2]) };
+  const pub = link.match(/t\.me\/([A-Za-z0-9_]{4,})\/(\d+)/);
+  if (pub) return { chat: `@${pub[1]}`, msg: Number(pub[2]) };
+  return null;
+}
+
 async function tg(method: string, payload: unknown) {
   const p = payload as Record<string, any>;
   if (
@@ -1530,12 +1539,28 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
 
     // Promoted post ko bot chat mein bhejein (forward)
     let delivered = false;
-    if (a.src_chat && a.src_msg) {
-      const fwd = await tgRaw("forwardMessage", {
+    let fromChat: string | number | null = a.src_chat ?? null;
+    let fromMsg: number | null = a.src_msg ?? null;
+    if (!fromChat || !fromMsg) {
+      const src = parsePostLink(a.link);
+      if (src) {
+        fromChat = src.chat;
+        fromMsg = src.msg;
+      }
+    }
+    if (fromChat && fromMsg) {
+      let fwd = await tgRaw("forwardMessage", {
         chat_id: chatId,
-        from_chat_id: a.src_chat,
-        message_id: a.src_msg,
+        from_chat_id: fromChat,
+        message_id: fromMsg,
       });
+      if (!fwd?.ok) {
+        fwd = await tgRaw("copyMessage", {
+          chat_id: chatId,
+          from_chat_id: fromChat,
+          message_id: fromMsg,
+        });
+      }
       delivered = !!fwd?.ok;
     }
     if (!delivered) {
