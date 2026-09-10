@@ -747,6 +747,44 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+  if (data === "aud_all" || data === "aud_pick" || data.startsWith("aud_set:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("pending_action")
+      .eq("tg_id", chatId)
+      .maybeSingle();
+    const pending = (u as any)?.pending_action as string | null;
+    if (!pending?.startsWith("aud:")) {
+      await showPromoteMenu(supabase, chatId);
+      return;
+    }
+    const info = JSON.parse(pending.slice(4));
+    if (data === "aud_pick") {
+      await send(chatId, "🎯 <b>Select audience</b>\n\nKis audience ko task dikhana hai?", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "👨 Male", callback_data: "aud_set:male" }, { text: "👩 Female", callback_data: "aud_set:female" }],
+            [{ text: "⭐ Premium users", callback_data: "aud_set:premium" }],
+            [{ text: "🇮🇳 India only", callback_data: "aud_set:india" }],
+            [{ text: "🔙 Back", callback_data: "aud_back" }],
+          ],
+        },
+      });
+      return;
+    }
+    info.audience = data === "aud_all" ? "no restrictions" : data.split(":")[1];
+    await askAmount(supabase, chatId, info);
+    return;
+  }
+
+  if (data === "aud_back") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await showAudienceMenu(chatId, "no restrictions");
+    return;
+  }
+
+
   if (data === "promo_menu") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
