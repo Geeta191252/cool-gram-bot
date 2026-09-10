@@ -1086,11 +1086,23 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
 
   if (data === "aud_back") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    const info = await getPendingInfo(supabase, chatId, "aud");
+    const info =
+      (await getPendingInfo(supabase, chatId, "aud")) ??
+      (await getPendingInfo(supabase, chatId, "price")) ??
+      (await getPendingInfo(supabase, chatId, "bud"));
     const cond = Boolean(info?.conditions);
     const backTo =
       info?.category === "bots" ? "back:botaud" : `back:chatpick:${info?.category ?? "channels"}`;
+    if (info) {
+      delete info.audience;
+      delete info.reward;
+      await supabase
+        .from("cg_users")
+        .update({ pending_action: `aud:${JSON.stringify(info)}` })
+        .eq("tg_id", chatId);
+    }
     await showAudienceMenu(chatId, "no restrictions", info?.category === "bots" ? (cond ? 300 : 100) : 25, backTo);
+
     return;
   }
 
