@@ -1170,6 +1170,26 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
 
   }
 
+  if (data === "cnt_max") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const info = await getPendingInfo(supabase, chatId, "bud");
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", chatId)
+      .maybeSingle();
+    const balance = Number((u as any)?.balance ?? 0);
+    if (!info) return;
+    const max = Math.floor(balance / unitCost(Number(info.reward)));
+    if (max < 1) {
+      await send(chatId, "❌ Balance kam hai.");
+      return;
+    }
+    await createCampaign(supabase, chatId, info, max, balance);
+    return;
+  }
+
+
   if (data === "aud_back") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     const info =
