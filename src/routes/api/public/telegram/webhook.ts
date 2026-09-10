@@ -1009,22 +1009,23 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
       return;
     }
     const info = JSON.parse(pending.slice(4));
+    const cond = Boolean(info.conditions);
+    const extra = info.category === "bots" ? (cond ? 300 : 100) : 25;
     if (data === "aud_pick") {
-      await send(chatId, "🎯 <b>Select audience</b>\n\nKis audience ko task dikhana hai?", {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "👨 Male", callback_data: "aud_set:male" }, { text: "👩 Female", callback_data: "aud_set:female" }],
-            [{ text: "⭐ Premium users", callback_data: "aud_set:premium" }],
-            [{ text: "🇮🇳 India only", callback_data: "aud_set:india" }],
-            [{ text: "🔙 Back", callback_data: "aud_back" }],
-          ],
-        },
-      });
+      await showLanguageMenu(chatId, extra);
       return;
     }
-    info.audience = data === "aud_all" ? "no restrictions" : data.split(":")[1];
-    await askAmount(supabase, chatId, info);
+    if (data === "aud_all") {
+      info.audience = "no restrictions";
+    } else {
+      const code = data.split(":")[1] ?? "en";
+      const lang = LANGS.find((l) => l.code === code);
+      info.audience = lang ? lang.label : code;
+      info.min_price = Number(info.min_price ?? 1) + extra;
+    }
+    await askPrice(supabase, chatId, info);
     return;
+
   }
 
   if (data === "aud_back") {
