@@ -331,9 +331,30 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
   const chatId = cb.message?.chat?.id as number;
   const data = String(cb.data ?? "");
 
-  if (data === "next") {
+  if (data === "earn" || data === "back") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    await showTask(supabase, chatId);
+    if (data === "back") {
+      await send(chatId, "🏠 Main menu", { reply_markup: MAIN_KEYBOARD });
+    } else {
+      await showCategories(supabase, chatId);
+    }
+    return;
+  }
+
+  if (data === "rules") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await send(
+      chatId,
+      `📝 <b>Rules</b>\n\n1️⃣ Task khol kar channel/group join karein, phir "I did it" dabayein.\n2️⃣ Join karne ke baad turant leave na karein.\n3️⃣ Ek task sirf ek baar count hota hai.\n4️⃣ Cheating par balance zero ho sakta hai.`,
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
+    );
+    return;
+  }
+
+  if (data.startsWith("cat:") || data.startsWith("next:")) {
+    const category = data.split(":")[1] || undefined;
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await showTask(supabase, chatId, category);
     return;
   }
 
