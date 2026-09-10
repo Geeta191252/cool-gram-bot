@@ -240,6 +240,76 @@ async function showPromoteMenu(supabase: ReturnType<typeof db>, chatId: number) 
   });
 }
 
+async function askChatPicker(
+  supabase: ReturnType<typeof db>,
+  chatId: number,
+  category: string,
+  isChannel: boolean,
+) {
+  await supabase.from("cg_users").update({ pending_action: `pick:${category}` }).eq("tg_id", chatId);
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text: `📣 <b>Choose a chat or ${isChannel ? "channel" : "group"} to promote</b> (the bot must be an admin)`,
+    parse_mode: "HTML",
+    reply_markup: {
+      keyboard: [
+        [
+          {
+            text: "🏠 I'm an admin",
+            request_chat: {
+              request_id: 1,
+              chat_is_channel: isChannel,
+              request_title: true,
+              request_username: true,
+              user_administrator_rights: { is_anonymous: false, can_invite_users: true },
+            },
+          },
+        ],
+        [
+          {
+            text: "🌐 I'm not an admin",
+            request_chat: {
+              request_id: 2,
+              chat_is_channel: isChannel,
+              request_title: true,
+              request_username: true,
+            },
+          },
+        ],
+        [{ text: "🔙 Back" }],
+      ],
+      resize_keyboard: true,
+      one_time_keyboard: true,
+    },
+  });
+}
+
+async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number, shared: any) {
+  const { data: u } = await supabase
+    .from("cg_users")
+    .select("pending_action")
+    .eq("tg_id", chatId)
+    .maybeSingle();
+  const pending = (u as any)?.pending_action as string | null;
+  const category = pending?.startsWith("pick:") ? pending.slice(5) : "channels";
+
+  const title = shared.title ?? "My channel";
+  const link = shared.username
+    ? `https://t.me/${shared.username}`
+    : `https://t.me/c/${String(shared.chat_id).replace("-100", "")}`;
+
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `amt:${JSON.stringify({ category, title, link })}` })
+    .eq("tg_id", chatId);
+
+  await send(
+    chatId,
+    `✅ Selected: <b>${title}</b>\n${link}\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
+    { reply_markup: MAIN_KEYBOARD },
+  );
+}
+
 async function handleText(supabase: ReturnType<typeof db>, chatId: number, from: any, text: string) {
   const startPayload = text.startsWith("/start") ? text.split(" ")[1] : undefined;
   const { user, isNew } = await getUser(supabase, from, startPayload);
@@ -249,6 +319,52 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
   if (isMenu && user?.pending_action) {
     await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
     (user as any).pending_action = null;
+  }
+
+  if (text === "🔙 Back" || text === "🏠 Main menu") {
+    await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+    await showPromoteMenu(supabase, chatId);
+    return;
+  }
+
+  if (user?.pending_action?.startsWith("amt:") && !isMenu && !text.startsWith("/")) {
+    const info = JSON.parse(user.pending_action.slice(4)) as {
+      category: string;
+      title: string;
+      link: string;
+    };
+    const parts = text.split("|").map((p) => p.trim());
+    const reward = Number(parts[0]);
+    const budget = Number(parts[1]);
+    if (parts.length !== 2 || !reward || !budget || reward < 1 || budget < reward) {
+      await send(chatId, "⚠️ Aise bhejein: <code>Reward | Budget</code>\nExample: <code>5 | 100</code>");
+      return;
+    }
+    if (user.balance < budget) {
+      await send(chatId, `❌ Balance kam hai. Aapke paas <b>${user.balance} ${COIN}</b> hain.`);
+      return;
+    }
+    await supabase.from("cg_ads").insert({
+      owner_tg: chatId,
+      title: info.title,
+      link: info.link,
+      reward,
+      budget_left: budget,
+      category: info.category,
+    });
+    await supabase
+      .from("cg_users")
+      .update({ balance: user.balance - budget, pending_action: null })
+      .eq("tg_id", chatId);
+    await supabase
+      .from("cg_transactions")
+      .insert({ tg_id: chatId, amount: -budget, reason: `Promotion: ${info.title}` });
+    await send(
+      chatId,
+      `🚀 <b>Campaign live hai!</b>\n\n${info.title}\nReward: ${reward} ${COIN} • Budget: ${budget} ${COIN}`,
+      { reply_markup: MAIN_KEYBOARD },
+    );
+    return;
   }
 
   if (user?.pending_action?.startsWith("promote") && !isMenu && !text.startsWith("/")) {
@@ -393,6 +509,10 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
     const key = data.split(":")[1];
     const type = PROMO_TYPES.find((t) => t.key === key);
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    if (key === "channels" || key === "groups" || key === "boost" || key === "reactions" || key === "views") {
+      await askChatPicker(supabase, chatId, key, key !== "groups");
+      return;
+    }
     await supabase.from("cg_users").update({ pending_action: `promote:${key}` }).eq("tg_id", chatId);
     await send(
       chatId,
@@ -516,7 +636,9 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
             const message = update.message ?? update.edited_message;
             const chatId = message?.chat?.id;
             const text = message?.text;
-            if (chatId && text) await handleText(supabase, chatId, message.from ?? {}, text.trim());
+            const shared = message?.chat_shared;
+            if (chatId && shared) await handleChatShared(supabase, chatId, shared);
+            else if (chatId && text) await handleText(supabase, chatId, message.from ?? {}, text.trim());
           }
         } catch (err) {
           console.error("Cool Gram webhook error", err);
