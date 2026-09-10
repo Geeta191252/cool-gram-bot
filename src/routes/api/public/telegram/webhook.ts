@@ -412,7 +412,7 @@ async function showBotTaskType(supabase: ReturnType<typeof db>, chatId: number, 
           { text: "▶️ Bot start only", callback_data: "bottype:start" },
           { text: "📝 With additional conditions", callback_data: "bottype:cond" },
         ],
-        [{ text: "⬅️ Back", callback_data: "promo_menu" }],
+        [{ text: "⬅️ Back", callback_data: "back:botref" }],
       ],
     },
   });
