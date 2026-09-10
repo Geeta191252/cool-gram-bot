@@ -220,14 +220,66 @@ function listHeader(category?: string) {
   return "⚠️ Don't leave channels earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
 }
 
+const BOT_SUBTYPES: { key: string; label: string; title: string; desc: string }[] = [
+  {
+    key: "plain",
+    label: "🤖 Ordinary Bots",
+    title: "🤖 Standard bots",
+    desc: "Regular Telegram bots, launch only.",
+  },
+  {
+    key: "webapp",
+    label: "📱 Bots with Web App",
+    title: "📱 Web App bots",
+    desc: "Open a mini app in Telegram.",
+  },
+  {
+    key: "cond",
+    label: "🤖 With additional conditions",
+    title: "🤖 With extra conditions",
+    desc: "Besides Start you must complete actions: pass a captcha, subscribe to sponsors, etc.",
+  },
+];
+
+async function showBotSubcategories(supabase: ReturnType<typeof db>, chatId: number) {
+  const { data: ads } = await supabase
+    .from("cg_ads")
+    .select("subtype")
+    .eq("is_active", true)
+    .eq("category", "bots");
+  const counts: Record<string, number> = {};
+  for (const a of (ads ?? []) as any[]) {
+    const k = a.subtype ?? "plain";
+    counts[k] = (counts[k] ?? 0) + 1;
+  }
+  const body = BOT_SUBTYPES.map(
+    (s) => `${s.title} — ${(counts[s.key] ?? 0).toLocaleString("en-US")}\n${s.desc}`,
+  ).join("\n\n");
+
+  await send(chatId, `<b>Choose a task category:</b>\n\n${body}`, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: BOT_SUBTYPES[0]!.label, callback_data: "botcat:plain" },
+          { text: BOT_SUBTYPES[1]!.label, callback_data: "botcat:webapp" },
+        ],
+        [{ text: BOT_SUBTYPES[2]!.label, callback_data: "botcat:cond" }],
+        [{ text: "🔙 Back", callback_data: "earn" }],
+      ],
+    },
+  });
+}
+
 async function showTask(
   supabase: ReturnType<typeof db>,
   chatId: number,
   category?: string,
   page = 0,
+  subtype?: string,
 ) {
   const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
   const doneIds = (done ?? []).map((d: any) => d.ad_id);
+  const backCb = category === "bots" ? "cat:bots" : "earn";
 
   let query = supabase
     .from("cg_ads")
@@ -236,6 +288,10 @@ async function showTask(
     .neq("owner_tg", chatId)
     .order("reward", { ascending: false });
   if (category) query = query.eq("category", category);
+  if (subtype) {
+    if (subtype === "plain") query = query.or("subtype.is.null,subtype.eq.plain");
+    else query = query.eq("subtype", subtype);
+  }
   if (doneIds.length) query = query.not("id", "in", `(${doneIds.join(",")})`);
 
   const { data: allAds } = await query;
@@ -245,7 +301,7 @@ async function showTask(
     await send(
       chatId,
       "😴 <b>No tasks available in this category right now.</b>\n\nCome back a bit later — new tasks are added every day.",
-      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: backCb }]] } },
     );
     return;
   }
@@ -254,7 +310,7 @@ async function showTask(
   const p = Math.min(Math.max(page, 0), totalPages - 1);
   const slice = ads.slice(p * PAGE_SIZE, p * PAGE_SIZE + PAGE_SIZE);
   const verb = actionVerb(category);
-  const cat = category ?? "";
+  const cat = subtype ? `${category}|${subtype}` : (category ?? "");
   const isViews = category === "views";
 
   const rows: any[] = slice.map((ad) =>
@@ -279,7 +335,7 @@ async function showTask(
     { text: `${totalPages}`, callback_data: `page:${cat}:${totalPages - 1}` },
   ]);
   if (!isViews) rows.push([{ text: "❌ Report", callback_data: `report:${cat}` }]);
-  rows.push([{ text: "🔙 Back", callback_data: "earn" }]);
+  rows.push([{ text: "🔙 Back", callback_data: backCb }]);
 
   await send(chatId, listHeader(category), { reply_markup: { inline_keyboard: rows } });
 }
@@ -777,6 +833,14 @@ async function createCampaign(
     reward,
     budget_left: reward * count,
     category: info.category,
+    subtype:
+      info.category === "bots"
+        ? info.conditions
+          ? "cond"
+          : info.webapp
+            ? "webapp"
+            : "plain"
+        : null,
   });
   await supabase
     .from("cg_users")
@@ -1393,15 +1457,27 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
   }
 
   if (data.startsWith("page:")) {
-    const [, cat, pg] = data.split(":");
+    const [, catRaw, pg] = data.split(":");
+    const [cat, sub] = (catRaw || "").split("|");
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    await showTask(supabase, chatId, cat || undefined, Number(pg) || 0);
+    await showTask(supabase, chatId, cat || undefined, Number(pg) || 0, sub || undefined);
+    return;
+  }
+
+  if (data.startsWith("botcat:")) {
+    const sub = data.split(":")[1];
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await showTask(supabase, chatId, "bots", 0, sub);
     return;
   }
 
   if (data.startsWith("cat:") || data.startsWith("next:")) {
     const category = data.split(":")[1] || undefined;
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    if (category === "bots") {
+      await showBotSubcategories(supabase, chatId);
+      return;
+    }
     await showTask(supabase, chatId, category);
     return;
   }

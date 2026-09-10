@@ -24,6 +24,7 @@ export type Database = {
           link: string
           owner_tg: number
           reward: number
+          subtype: string | null
           title: string
         }
         Insert: {
@@ -35,6 +36,7 @@ export type Database = {
           link: string
           owner_tg: number
           reward?: number
+          subtype?: string | null
           title: string
         }
         Update: {
@@ -46,6 +48,7 @@ export type Database = {
           link?: string
           owner_tg?: number
           reward?: number
+          subtype?: string | null
           title?: string
         }
         Relationships: []
