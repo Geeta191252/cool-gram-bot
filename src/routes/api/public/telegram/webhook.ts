@@ -173,10 +173,14 @@ const CATEGORIES: { key: string; label: string }[] = [
 async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
   const { data: ads } = await supabase
     .from("cg_ads")
-    .select("category")
-    .eq("is_active", true);
+    .select("id, category, reward, budget_left")
+    .eq("is_active", true)
+    .neq("owner_tg", chatId);
+  const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
+  const doneSet = new Set(((done ?? []) as any[]).map((d) => String(d.ad_id)));
   const counts: Record<string, number> = {};
   for (const a of (ads ?? []) as any[]) {
+    if (doneSet.has(String(a.id)) || a.budget_left < a.reward) continue;
     counts[a.category] = (counts[a.category] ?? 0) + 1;
   }
 
