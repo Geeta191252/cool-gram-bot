@@ -259,7 +259,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
 
   switch (text) {
     case "💰 Earnings":
-      await showTask(supabase, chatId);
+      await showCategories(supabase, chatId);
       return;
     case "📢 Promote":
       await supabase.from("cg_users").update({ pending_action: "promote" }).eq("tg_id", chatId);
