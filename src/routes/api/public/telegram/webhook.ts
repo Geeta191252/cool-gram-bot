@@ -284,6 +284,41 @@ async function askChatPicker(
   });
 }
 
+async function askForwardPost(supabase: ReturnType<typeof db>, chatId: number) {
+  await supabase.from("cg_users").update({ pending_action: "fwd:views" }).eq("tg_id", chatId);
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text: "🔁 <b>Forward the post you want to promote.</b>\n\n<blockquote>Open the channel → pick the post → Forward → COOL GRAM</blockquote>",
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "promo_menu" }]] },
+  });
+}
+
+async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: number, message: any) {
+  const origin = message.forward_origin ?? {};
+  const originChat = origin.chat ?? message.forward_from_chat;
+  const msgId = origin.message_id ?? message.forward_from_message_id;
+  if (!originChat || !msgId) {
+    await send(chatId, "⚠️ Ye post kisi channel se forward nahi hai. Channel ka post forward karein.");
+    return;
+  }
+  const title = originChat.title ?? "Post";
+  const link = originChat.username
+    ? `https://t.me/${originChat.username}/${msgId}`
+    : `https://t.me/c/${String(originChat.id).replace("-100", "")}/${msgId}`;
+
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `amt:${JSON.stringify({ category: "views", title, link })}` })
+    .eq("tg_id", chatId);
+
+  await send(
+    chatId,
+    `✅ Post selected: <b>${title}</b>\n${link}\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
+    { reply_markup: MAIN_KEYBOARD },
+  );
+}
+
 async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number, shared: any) {
   const { data: u } = await supabase
     .from("cg_users")
