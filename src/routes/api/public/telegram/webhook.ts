@@ -576,6 +576,62 @@ async function showAudienceMenu(chatId: number, current: string, extra = 25, bac
   );
 }
 
+const LANGS: { code: string; label: string }[] = [
+  { code: "uk", label: "🇺🇦 Українська" },
+  { code: "ru", label: "🇷🇺 Русский" },
+  { code: "en", label: "🇬🇧 English" },
+  { code: "de", label: "🇩🇪 Deutsch" },
+  { code: "zh", label: "🇨🇳 中文" },
+  { code: "ar", label: "🇸🇦 العربية" },
+  { code: "fa", label: "🇮🇷 فارسی" },
+  { code: "es", label: "🇪🇸 Español" },
+  { code: "id", label: "🇮🇩 Bahasa Indonesia" },
+  { code: "pt", label: "🇧🇷 Português" },
+  { code: "hi", label: "🇮🇳 हिंदी" },
+  { code: "bn", label: "🇧🇩 বাংলা" },
+  { code: "uz", label: "🇺🇿 O'zbekcha" },
+  { code: "tr", label: "🇹🇷 Türkçe" },
+  { code: "kk", label: "🇰🇿 Қазақша" },
+  { code: "fr", label: "🇫🇷 Français" },
+];
+
+async function showLanguageMenu(chatId: number, extra: number) {
+  const rows: any[] = [];
+  for (let i = 0; i < LANGS.length; i += 3) {
+    rows.push(LANGS.slice(i, i + 3).map((l) => ({ text: l.label, callback_data: `aud_set:${l.code}` })));
+  }
+  rows.push([{ text: "🔙 Back", callback_data: "aud_back" }]);
+  await send(
+    chatId,
+    `• Audience: no restrictions\n\n🌐 <b>Choose one or more languages</b>\n💡 The audience filter adds <b>+${extra} ${COIN}</b> to the min. price per completion.`,
+    { reply_markup: { inline_keyboard: rows } },
+  );
+}
+
+function unitName(category: string) {
+  if (category === "bots") return "1 bot visit";
+  if (category === "views") return "1 post view";
+  if (category === "reactions") return "1 reaction";
+  if (category === "groups") return "1 group join";
+  return "1 subscriber";
+}
+
+async function askPrice(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  const min = Number(info.min_price ?? 1);
+  const rec = Math.round(min * 1.2);
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `price:${JSON.stringify(info)}` })
+    .eq("tg_id", chatId);
+  await send(
+    chatId,
+    `💲 <b>Set the price for ${unitName(info.category)}</b> — this is the worker's reward.\n\n` +
+      `<blockquote>Minimum — <b>${min.toLocaleString("en-US")} ${COIN}</b>\n💡 Recommended — <b>${rec.toLocaleString("en-US")} ${COIN}</b>\nCompletion speed depends on your price.</blockquote>`,
+    { reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "aud_back" }]] } },
+  );
+}
+
+
 async function askAmount(supabase: ReturnType<typeof db>, chatId: number, info: any) {
   await supabase
     .from("cg_users")
