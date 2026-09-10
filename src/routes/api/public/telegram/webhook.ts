@@ -217,7 +217,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     (user as any).pending_action = null;
   }
 
-  if (user?.pending_action === "promote" && !isMenu && !text.startsWith("/")) {
+  if (user?.pending_action?.startsWith("promote") && !isMenu && !text.startsWith("/")) {
     const parts = text.split("|").map((p) => p.trim());
     const [title, link, rewardRaw, budgetRaw] = parts;
     const reward = Number(rewardRaw);
