@@ -664,7 +664,7 @@ async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: numb
   await supabase
     .from("cg_users")
     .update({
-      pending_action: `aud:${JSON.stringify({ category: "views", title, link, base_min_price: 25 })}`,
+      pending_action: `aud:${JSON.stringify({ category: "views", title, link, base_min_price: 25, src_chat: originChat.id, src_msg: msgId })}`,
     })
     .eq("tg_id", chatId);
 
@@ -831,6 +831,8 @@ async function createCampaign(
     reward,
     budget_left: reward * count,
     category: info.category,
+    src_chat: info.src_chat ?? null,
+    src_msg: info.src_msg ?? null,
     subtype:
       info.category === "bots"
         ? info.conditions
@@ -1489,7 +1491,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const adId = data.slice(5);
     const { data: ad } = await supabase
       .from("cg_ads")
-      .select("id, title, link, reward, budget_left, is_active, category")
+      .select("id, title, link, reward, budget_left, is_active, category, src_chat, src_msg")
       .eq("id", adId)
       .maybeSingle();
     const a = ad as any;
@@ -1516,13 +1518,43 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       .from("cg_transactions")
       .insert({ tg_id: chatId, amount: a.reward, reason: `Task: ${a.title}` });
     await tg("answerCallbackQuery", { callback_query_id: cb.id, text: `+${a.reward} ${COIN} 🎉` });
-    await tg("sendMessage", {
+
+    // Promoted post ko bot chat mein bhejein (forward)
+    let delivered = false;
+    if (a.src_chat && a.src_msg) {
+      const fwd = await tgRaw("forwardMessage", {
+        chat_id: chatId,
+        from_chat_id: a.src_chat,
+        message_id: a.src_msg,
+      });
+      delivered = !!fwd?.ok;
+    }
+    if (!delivered) {
+      await tgRaw("sendMessage", {
+        chat_id: chatId,
+        text: `👁 <b>Open the post</b>`,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [[{ text: "👁 Open post", url: a.link }]] },
+      });
+    }
+
+    // 5 second baad reward + Next Post / Report / Back
+    await new Promise((r) => setTimeout(r, 5000));
+
+    const newBalance = ((u as any)?.balance ?? 0) + a.reward;
+    await tgRaw("sendMessage", {
       chat_id: chatId,
-      text: `👁 <b>Open the post</b>\n\n+${a.reward} ${COIN} credited.`,
-      parse_mode: "HTML",
-      reply_markup: { inline_keyboard: [[{ text: "👁 Open post", url: a.link }]] },
+      text:
+        `💲 You have earned ${a.reward.toLocaleString("en-US")} grams for viewing the post!\n` +
+        `💰 Your balance: ${newBalance.toLocaleString("en-US")} grams`,
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "▶️ Next Post", callback_data: "cat:views" }],
+          [{ text: "❌ Report", callback_data: `report:views` }],
+          [{ text: "🔙 Back", callback_data: "earn" }],
+        ],
+      },
     });
-    await showTask(supabase, chatId, "views");
     return;
   }
 
