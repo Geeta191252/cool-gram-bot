@@ -403,7 +403,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
 
   if (user?.pending_action === "botlink" && !isMenu && !text.startsWith("/")) {
     const raw = text.trim();
-    const uname = raw.replace(/^https?:\/\/t\.me\//i, "").replace(/^@/, "").split(/[/?\s]/)[0];
+    const uname = raw.replace(/^https?:\/\/t\.me\//i, "").replace(/^@/, "").split(/[/?\s]/)[0] ?? "";
     if (!/^[A-Za-z0-9_]{4,32}$/.test(uname)) {
       await send(chatId, "⚠️ Sahi bot username bhejein, jaise <code>@MyCoolBot</code>.");
       return;
