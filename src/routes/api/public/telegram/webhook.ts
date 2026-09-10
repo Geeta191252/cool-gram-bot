@@ -284,6 +284,41 @@ async function askChatPicker(
   });
 }
 
+async function askForwardPost(supabase: ReturnType<typeof db>, chatId: number) {
+  await supabase.from("cg_users").update({ pending_action: "fwd:views" }).eq("tg_id", chatId);
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text: "🔁 <b>Forward the post you want to promote.</b>\n\n<blockquote>Open the channel → pick the post → Forward → COOL GRAM</blockquote>",
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "promo_menu" }]] },
+  });
+}
+
+async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: number, message: any) {
+  const origin = message.forward_origin ?? {};
+  const originChat = origin.chat ?? message.forward_from_chat;
+  const msgId = origin.message_id ?? message.forward_from_message_id;
+  if (!originChat || !msgId) {
+    await send(chatId, "⚠️ Ye post kisi channel se forward nahi hai. Channel ka post forward karein.");
+    return;
+  }
+  const title = originChat.title ?? "Post";
+  const link = originChat.username
+    ? `https://t.me/${originChat.username}/${msgId}`
+    : `https://t.me/c/${String(originChat.id).replace("-100", "")}/${msgId}`;
+
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `amt:${JSON.stringify({ category: "views", title, link })}` })
+    .eq("tg_id", chatId);
+
+  await send(
+    chatId,
+    `✅ Post selected: <b>${title}</b>\n${link}\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
+    { reply_markup: MAIN_KEYBOARD },
+  );
+}
+
 async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number, shared: any) {
   const { data: u } = await supabase
     .from("cg_users")
@@ -509,7 +544,11 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
     const key = data.split(":")[1];
     const type = PROMO_TYPES.find((t) => t.key === key);
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    if (key === "channels" || key === "groups" || key === "boost" || key === "reactions" || key === "views") {
+    if (key === "views") {
+      await askForwardPost(supabase, chatId);
+      return;
+    }
+    if (key === "channels" || key === "groups" || key === "boost" || key === "reactions") {
       await askChatPicker(supabase, chatId, key, key !== "groups");
       return;
     }
@@ -637,7 +676,19 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
             const chatId = message?.chat?.id;
             const text = message?.text;
             const shared = message?.chat_shared;
+            const forwarded = message?.forward_origin ?? message?.forward_from_chat;
+            let pending: string | null = null;
+            if (chatId && forwarded) {
+              const { data: u } = await supabase
+                .from("cg_users")
+                .select("pending_action")
+                .eq("tg_id", chatId)
+                .maybeSingle();
+              pending = ((u as any)?.pending_action as string | null) ?? null;
+            }
             if (chatId && shared) await handleChatShared(supabase, chatId, shared);
+            else if (chatId && forwarded && pending === "fwd:views")
+              await handleForwardedPost(supabase, chatId, message);
             else if (chatId && text) await handleText(supabase, chatId, message.from ?? {}, text.trim());
           }
         } catch (err) {
