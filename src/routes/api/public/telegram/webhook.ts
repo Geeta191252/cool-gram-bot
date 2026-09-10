@@ -576,6 +576,62 @@ async function showAudienceMenu(chatId: number, current: string, extra = 25, bac
   );
 }
 
+const LANGS: { code: string; label: string }[] = [
+  { code: "uk", label: "🇺🇦 Українська" },
+  { code: "ru", label: "🇷🇺 Русский" },
+  { code: "en", label: "🇬🇧 English" },
+  { code: "de", label: "🇩🇪 Deutsch" },
+  { code: "zh", label: "🇨🇳 中文" },
+  { code: "ar", label: "🇸🇦 العربية" },
+  { code: "fa", label: "🇮🇷 فارسی" },
+  { code: "es", label: "🇪🇸 Español" },
+  { code: "id", label: "🇮🇩 Bahasa Indonesia" },
+  { code: "pt", label: "🇧🇷 Português" },
+  { code: "hi", label: "🇮🇳 हिंदी" },
+  { code: "bn", label: "🇧🇩 বাংলা" },
+  { code: "uz", label: "🇺🇿 O'zbekcha" },
+  { code: "tr", label: "🇹🇷 Türkçe" },
+  { code: "kk", label: "🇰🇿 Қазақша" },
+  { code: "fr", label: "🇫🇷 Français" },
+];
+
+async function showLanguageMenu(chatId: number, extra: number) {
+  const rows: any[] = [];
+  for (let i = 0; i < LANGS.length; i += 3) {
+    rows.push(LANGS.slice(i, i + 3).map((l) => ({ text: l.label, callback_data: `aud_set:${l.code}` })));
+  }
+  rows.push([{ text: "🔙 Back", callback_data: "aud_back" }]);
+  await send(
+    chatId,
+    `• Audience: no restrictions\n\n🌐 <b>Choose one or more languages</b>\n💡 The audience filter adds <b>+${extra} ${COIN}</b> to the min. price per completion.`,
+    { reply_markup: { inline_keyboard: rows } },
+  );
+}
+
+function unitName(category: string) {
+  if (category === "bots") return "1 bot visit";
+  if (category === "views") return "1 post view";
+  if (category === "reactions") return "1 reaction";
+  if (category === "groups") return "1 group join";
+  return "1 subscriber";
+}
+
+async function askPrice(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  const min = Number(info.min_price ?? 1);
+  const rec = Math.round(min * 1.2);
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `price:${JSON.stringify(info)}` })
+    .eq("tg_id", chatId);
+  await send(
+    chatId,
+    `💲 <b>Set the price for ${unitName(info.category)}</b> — this is the worker's reward.\n\n` +
+      `<blockquote>Minimum — <b>${min.toLocaleString("en-US")} ${COIN}</b>\n💡 Recommended — <b>${rec.toLocaleString("en-US")} ${COIN}</b>\nCompletion speed depends on your price.</blockquote>`,
+    { reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "aud_back" }]] } },
+  );
+}
+
+
 async function askAmount(supabase: ReturnType<typeof db>, chatId: number, info: any) {
   await supabase
     .from("cg_users")
@@ -678,6 +734,62 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     );
     return;
   }
+
+  if (user?.pending_action?.startsWith("price:") && !isMenu && !text.startsWith("/")) {
+    const info = JSON.parse(user.pending_action.slice(6));
+    const min = Number(info.min_price ?? 1);
+    const price = Number(text.replace(/[,\s]/g, ""));
+    if (!price || price < min) {
+      await send(chatId, `⚠️ Minimum ${min.toLocaleString("en-US")} ${COIN} hai. Sahi price bhejein.`);
+      return;
+    }
+    info.reward = price;
+    await supabase
+      .from("cg_users")
+      .update({ pending_action: `bud:${JSON.stringify(info)}` })
+      .eq("tg_id", chatId);
+    await send(
+      chatId,
+      `💰 <b>Set your budget</b>\nPrice per completion: <b>${price.toLocaleString("en-US")} ${COIN}</b>\nBalance: <b>${user.balance} ${COIN}</b>\n\nBudget bhejein (sirf number).`,
+    );
+    return;
+  }
+
+  if (user?.pending_action?.startsWith("bud:") && !isMenu && !text.startsWith("/")) {
+    const info = JSON.parse(user.pending_action.slice(4));
+    const budget = Number(text.replace(/[,\s]/g, ""));
+    const reward = Number(info.reward);
+    if (!budget || budget < reward) {
+      await send(chatId, `⚠️ Budget kam se kam ${reward.toLocaleString("en-US")} ${COIN} hona chahiye.`);
+      return;
+    }
+    if (user.balance < budget) {
+      await send(chatId, `❌ Balance kam hai. Aapke paas <b>${user.balance} ${COIN}</b> hain.`);
+      return;
+    }
+    await supabase.from("cg_ads").insert({
+      owner_tg: chatId,
+      title: info.title ?? "Promotion",
+      link: info.link ?? "",
+      reward,
+      budget_left: budget,
+      category: info.category,
+    });
+    await supabase
+      .from("cg_users")
+      .update({ balance: user.balance - budget, pending_action: null })
+      .eq("tg_id", chatId);
+    await supabase
+      .from("cg_transactions")
+      .insert({ tg_id: chatId, amount: -budget, reason: `Promotion: ${info.title ?? info.category}` });
+    await send(
+      chatId,
+      `🚀 <b>Campaign live hai!</b>\n\n${info.title ?? ""}\nReward: ${reward} ${COIN} • Budget: ${budget} ${COIN}\nAudience: ${info.audience ?? "no restrictions"}`,
+      { reply_markup: MAIN_KEYBOARD },
+    );
+    return;
+  }
+
 
   if (user?.pending_action?.startsWith("amt:") && !isMenu && !text.startsWith("/")) {
     const info = JSON.parse(user.pending_action.slice(4)) as {
@@ -953,31 +1065,44 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
       return;
     }
     const info = JSON.parse(pending.slice(4));
+    const cond = Boolean(info.conditions);
+    const extra = info.category === "bots" ? (cond ? 300 : 100) : 25;
     if (data === "aud_pick") {
-      await send(chatId, "🎯 <b>Select audience</b>\n\nKis audience ko task dikhana hai?", {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "👨 Male", callback_data: "aud_set:male" }, { text: "👩 Female", callback_data: "aud_set:female" }],
-            [{ text: "⭐ Premium users", callback_data: "aud_set:premium" }],
-            [{ text: "🇮🇳 India only", callback_data: "aud_set:india" }],
-            [{ text: "🔙 Back", callback_data: "aud_back" }],
-          ],
-        },
-      });
+      await showLanguageMenu(chatId, extra);
       return;
     }
-    info.audience = data === "aud_all" ? "no restrictions" : data.split(":")[1];
-    await askAmount(supabase, chatId, info);
+    if (data === "aud_all") {
+      info.audience = "no restrictions";
+    } else {
+      const code = data.split(":")[1] ?? "en";
+      const lang = LANGS.find((l) => l.code === code);
+      info.audience = lang ? lang.label : code;
+      info.min_price = Number(info.min_price ?? 1) + extra;
+    }
+    await askPrice(supabase, chatId, info);
     return;
+
   }
 
   if (data === "aud_back") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    const info = await getPendingInfo(supabase, chatId, "aud");
+    const info =
+      (await getPendingInfo(supabase, chatId, "aud")) ??
+      (await getPendingInfo(supabase, chatId, "price")) ??
+      (await getPendingInfo(supabase, chatId, "bud"));
     const cond = Boolean(info?.conditions);
     const backTo =
       info?.category === "bots" ? "back:botaud" : `back:chatpick:${info?.category ?? "channels"}`;
+    if (info) {
+      delete info.audience;
+      delete info.reward;
+      await supabase
+        .from("cg_users")
+        .update({ pending_action: `aud:${JSON.stringify(info)}` })
+        .eq("tg_id", chatId);
+    }
     await showAudienceMenu(chatId, "no restrictions", info?.category === "bots" ? (cond ? 300 : 100) : 25, backTo);
+
     return;
   }
 
