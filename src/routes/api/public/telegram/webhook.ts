@@ -509,6 +509,10 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
     const key = data.split(":")[1];
     const type = PROMO_TYPES.find((t) => t.key === key);
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    if (key === "channels" || key === "groups" || key === "boost" || key === "reactions" || key === "views") {
+      await askChatPicker(supabase, chatId, key, key !== "groups");
+      return;
+    }
     await supabase.from("cg_users").update({ pending_action: `promote:${key}` }).eq("tg_id", chatId);
     await send(
       chatId,
