@@ -430,15 +430,40 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
 
   await supabase
     .from("cg_users")
-    .update({ pending_action: `amt:${JSON.stringify({ category, title, link })}` })
+    .update({ pending_action: `aud:${JSON.stringify({ category, title, link })}` })
     .eq("tg_id", chatId);
 
+  await showAudienceMenu(chatId, "no restrictions");
+}
+
+async function showAudienceMenu(chatId: number, current: string) {
   await send(
     chatId,
-    `✅ Selected: <b>${title}</b>\n${link}\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
+    `🎯 <b>Task audience</b>\nCurrent: ${current}\n\nChoose who can access the task:\n💡 The audience filter adds <b>+100 ${COIN}</b> to the min. price per completion.`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "🌐 Allow all", callback_data: "aud_all" }],
+          [{ text: "🎯 Select audience", callback_data: "aud_pick" }],
+          [{ text: "🔙 Back", callback_data: "promo_menu" }],
+        ],
+      },
+    },
+  );
+}
+
+async function askAmount(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `amt:${JSON.stringify(info)}` })
+    .eq("tg_id", chatId);
+  await send(
+    chatId,
+    `✅ Selected: <b>${info.title}</b>\n${info.link}\n\nAudience: <b>${info.audience ?? "no restrictions"}</b>\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
     { reply_markup: MAIN_KEYBOARD },
   );
 }
+
 
 async function handleText(supabase: ReturnType<typeof db>, chatId: number, from: any, text: string) {
   const startPayload = text.startsWith("/start") ? text.split(" ")[1] : undefined;
@@ -721,6 +746,44 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
     await askBotLink(supabase, chatId);
     return;
   }
+
+  if (data === "aud_all" || data === "aud_pick" || data.startsWith("aud_set:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("pending_action")
+      .eq("tg_id", chatId)
+      .maybeSingle();
+    const pending = (u as any)?.pending_action as string | null;
+    if (!pending?.startsWith("aud:")) {
+      await showPromoteMenu(supabase, chatId);
+      return;
+    }
+    const info = JSON.parse(pending.slice(4));
+    if (data === "aud_pick") {
+      await send(chatId, "🎯 <b>Select audience</b>\n\nKis audience ko task dikhana hai?", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "👨 Male", callback_data: "aud_set:male" }, { text: "👩 Female", callback_data: "aud_set:female" }],
+            [{ text: "⭐ Premium users", callback_data: "aud_set:premium" }],
+            [{ text: "🇮🇳 India only", callback_data: "aud_set:india" }],
+            [{ text: "🔙 Back", callback_data: "aud_back" }],
+          ],
+        },
+      });
+      return;
+    }
+    info.audience = data === "aud_all" ? "no restrictions" : data.split(":")[1];
+    await askAmount(supabase, chatId, info);
+    return;
+  }
+
+  if (data === "aud_back") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await showAudienceMenu(chatId, "no restrictions");
+    return;
+  }
+
 
   if (data === "promo_menu") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
