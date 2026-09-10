@@ -236,6 +236,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       link,
       reward,
       budget_left: budget,
+      category: user.pending_action?.split(":")[1] || "channels",
     });
     await supabase
       .from("cg_users")
