@@ -905,8 +905,13 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
       await showPromoteMenu(supabase, chatId);
       return;
     }
-    info.task_type = data.split(":")[1] === "start" ? "Bot start only" : "With additional conditions";
-    await showBotAudience(supabase, chatId, info);
+    const isCond = data.split(":")[1] !== "start";
+    info.task_type = isCond ? "With additional conditions" : "Bot start only";
+    if (isCond) {
+      await askBotConditions(supabase, chatId, info);
+    } else {
+      await showBotAudience(supabase, chatId, info);
+    }
     return;
   }
 
@@ -918,13 +923,15 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
       return;
     }
     const isPremium = data.split(":")[1] === "premium";
+    const cond = Boolean(info.conditions);
     info.audience = isPremium ? "Telegram Premium only" : "All users";
-    info.min_price = isPremium ? 1400 : 900;
+    info.min_price = cond ? (isPremium ? 4000 : 3000) : isPremium ? 1400 : 900;
     await supabase
       .from("cg_users")
       .update({ pending_action: `aud:${JSON.stringify(info)}` })
       .eq("tg_id", chatId);
-    await showAudienceMenu(chatId, "no restrictions", 100);
+    await showAudienceMenu(chatId, "no restrictions", cond ? 300 : 100);
+
     return;
   }
 
