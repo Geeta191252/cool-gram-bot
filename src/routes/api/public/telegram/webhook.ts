@@ -1148,7 +1148,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
-  if (data === "aud_all" || data === "aud_pick" || data.startsWith("aud_set:")) {
+  if (data === "aud_all" || data === "aud_pick" || data === "aud_save" || data.startsWith("aud_set:")) {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     const { data: u } = await supabase
       .from("cg_users")
@@ -1163,22 +1163,36 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const info = JSON.parse(pending.slice(4));
     const cond = Boolean(info.conditions);
     const extra = info.category === "bots" ? (cond ? 300 : 100) : 25;
+    const langs: string[] = Array.isArray(info.langs) ? info.langs : [];
     if (data === "aud_pick") {
-      await showLanguageMenu(chatId, extra);
+      await showLanguageMenu(chatId, extra, langs);
       return;
     }
-    if (data === "aud_all") {
-      info.audience = info.audience === "Telegram Premium only" ? info.audience : "no restrictions";
-    } else {
+    if (data.startsWith("aud_set:")) {
       const code = data.split(":")[1] ?? "en";
-      const lang = LANGS.find((l) => l.code === code);
-      info.audience = lang ? lang.label : code;
+      const next = langs.includes(code) ? langs.filter((c) => c !== code) : [...langs, code];
+      info.langs = next;
+      await supabase
+        .from("cg_users")
+        .update({ pending_action: `aud:${JSON.stringify(info)}` })
+        .eq("tg_id", chatId);
+      await showLanguageMenu(chatId, extra, next);
+      return;
+    }
+    if (data === "aud_save") {
+      if (!langs.length) {
+        await showLanguageMenu(chatId, extra, langs);
+        return;
+      }
+      info.audience = langs.map((c) => LANGS.find((l) => l.code === c)?.label ?? c).join(", ");
       info.min_price = Number(info.min_price ?? 1) + extra;
+    } else {
+      info.audience = info.audience === "Telegram Premium only" ? info.audience : "no restrictions";
     }
     await askPrice(supabase, chatId, info);
     return;
-
   }
+
 
   if (data === "cnt_max") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
