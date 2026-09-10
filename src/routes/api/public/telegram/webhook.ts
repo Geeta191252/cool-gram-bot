@@ -604,6 +604,12 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+  if (data === "bot_pick") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await askBotLink(supabase, chatId);
+    return;
+  }
+
   if (data === "promo_menu") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
