@@ -1158,7 +1158,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       return;
     }
     if (data === "aud_all") {
-      info.audience = "no restrictions";
+      info.audience = info.audience === "Telegram Premium only" ? info.audience : "no restrictions";
     } else {
       const code = data.split(":")[1] ?? "en";
       const lang = LANGS.find((l) => l.code === code);
