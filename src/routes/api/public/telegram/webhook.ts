@@ -418,13 +418,36 @@ async function showBotTaskType(supabase: ReturnType<typeof db>, chatId: number, 
   });
 }
 
-async function showBotAudience(supabase: ReturnType<typeof db>, chatId: number, info: any) {
-  await setPending(supabase, chatId, "botaud", info);
+async function askBotConditions(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  await setPending(supabase, chatId, "botcond", info);
   await tg("sendMessage", {
     chat_id: chatId,
     text:
-      `1️⃣ <b>All users</b>\nBroad reach among all COOL GRAM users.\n💡 Minimum price: 900 ${COIN}/unit.\n\n` +
-      `2️⃣ <b>Telegram Premium only</b>\nShown only to Telegram Premium users — a higher-quality audience.\n💡 Minimum price: 1,400 ${COIN}/unit.`,
+      "📝 <b>Describe the task conditions</b> — what the worker must do after starting the bot. For example: press a button, complete a captcha, subscribe to sponsors.\n\n" +
+      "<blockquote>⛔ <b>You cannot require:</b>\n" +
+      "• personal data (name, phone number, email, documents, KYC)\n" +
+      "• payment/top-up\n" +
+      "• actions taking longer than 10 minutes\n" +
+      "• third-party services (OAuth, API, Telegram Login)\n" +
+      "• involving other people (referrals)\n" +
+      "• following suspicious links</blockquote>\n\n" +
+      "No more than 400 characters.",
+    parse_mode: "HTML",
+    link_preview_options: { is_disabled: true },
+    reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "promo_menu" }]] },
+  });
+}
+
+async function showBotAudience(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  await setPending(supabase, chatId, "botaud", info);
+  const cond = Boolean(info.conditions);
+  const priceAll = cond ? "3,000" : "900";
+  const pricePrem = cond ? "4,000" : "1,400";
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text:
+      `1️⃣ <b>All users</b>\nBroad reach among all COOL GRAM users.\n💡 Minimum price: ${priceAll} ${COIN}/unit.\n\n` +
+      `2️⃣ <b>Telegram Premium only</b>\nShown only to Telegram Premium users — a higher-quality audience.\n💡 Minimum price: ${pricePrem} ${COIN}/unit.`,
     parse_mode: "HTML",
     reply_markup: {
       inline_keyboard: [
@@ -435,6 +458,7 @@ async function showBotAudience(supabase: ReturnType<typeof db>, chatId: number, 
     },
   });
 }
+
 
 
 
