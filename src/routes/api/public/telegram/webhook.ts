@@ -391,7 +391,7 @@ async function askBotRefLink(supabase: ReturnType<typeof db>, chatId: number, in
     reply_markup: {
       inline_keyboard: [
         [{ text: "➡️ Skip", callback_data: "botref_skip" }],
-        [{ text: "⬅️ Back", callback_data: "promo_menu" }],
+        [{ text: "⬅️ Back", callback_data: "back:botpick" }],
       ],
     },
   });
