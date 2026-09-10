@@ -1398,7 +1398,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const adId = data.slice(5);
     const { data: ad } = await supabase
       .from("cg_ads")
-      .select("id, title, reward, budget_left, is_active")
+      .select("id, title, reward, budget_left, is_active, category")
       .eq("id", adId)
       .maybeSingle();
 
@@ -1434,7 +1434,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
 
     await tg("answerCallbackQuery", { callback_query_id: cb.id, text: `+${reward} ${COIN} 🎉` });
     await send(chatId, `✅ Task complete! <b>+${reward} ${COIN}</b> credited.`);
-    await showTask(supabase, chatId);
+    await showTask(supabase, chatId, (ad as any).category);
   }
 }
 
