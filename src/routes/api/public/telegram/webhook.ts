@@ -220,11 +220,62 @@ function listHeader(category?: string) {
   return "⚠️ Don't leave channels earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
 }
 
+const BOT_SUBTYPES: { key: string; label: string; title: string; desc: string }[] = [
+  {
+    key: "plain",
+    label: "🤖 Ordinary Bots",
+    title: "🤖 Standard bots",
+    desc: "Regular Telegram bots, launch only.",
+  },
+  {
+    key: "webapp",
+    label: "📱 Bots with Web App",
+    title: "📱 Web App bots",
+    desc: "Open a mini app in Telegram.",
+  },
+  {
+    key: "cond",
+    label: "🤖 With additional conditions",
+    title: "🤖 With extra conditions",
+    desc: "Besides Start you must complete actions: pass a captcha, subscribe to sponsors, etc.",
+  },
+];
+
+async function showBotSubcategories(supabase: ReturnType<typeof db>, chatId: number) {
+  const { data: ads } = await supabase
+    .from("cg_ads")
+    .select("subtype")
+    .eq("is_active", true)
+    .eq("category", "bots");
+  const counts: Record<string, number> = {};
+  for (const a of (ads ?? []) as any[]) {
+    const k = a.subtype ?? "plain";
+    counts[k] = (counts[k] ?? 0) + 1;
+  }
+  const body = BOT_SUBTYPES.map(
+    (s) => `${s.title} — ${(counts[s.key] ?? 0).toLocaleString("en-US")}\n${s.desc}`,
+  ).join("\n\n");
+
+  await send(chatId, `<b>Choose a task category:</b>\n\n${body}`, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: BOT_SUBTYPES[0].label, callback_data: "botcat:plain" },
+          { text: BOT_SUBTYPES[1].label, callback_data: "botcat:webapp" },
+        ],
+        [{ text: BOT_SUBTYPES[2].label, callback_data: "botcat:cond" }],
+        [{ text: "🔙 Back", callback_data: "earn" }],
+      ],
+    },
+  });
+}
+
 async function showTask(
   supabase: ReturnType<typeof db>,
   chatId: number,
   category?: string,
   page = 0,
+  subtype?: string,
 ) {
   const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
   const doneIds = (done ?? []).map((d: any) => d.ad_id);
