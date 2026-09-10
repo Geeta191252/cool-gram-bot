@@ -663,14 +663,12 @@ async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: numb
 
   await supabase
     .from("cg_users")
-    .update({ pending_action: `amt:${JSON.stringify({ category: "views", title, link })}` })
+    .update({
+      pending_action: `aud:${JSON.stringify({ category: "views", title, link, base_min_price: 25 })}`,
+    })
     .eq("tg_id", chatId);
 
-  await send(
-    chatId,
-    `✅ Post selected: <b>${title}</b>\n${link}\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
-    { reply_markup: MAIN_KEYBOARD },
-  );
+  await showAudienceMenu(chatId, "no restrictions", 25, "back:fwd");
 }
 
 
