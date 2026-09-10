@@ -660,6 +660,78 @@ async function askPrice(supabase: ReturnType<typeof db>, chatId: number, info: a
   );
 }
 
+const COMMISSION = 0.15;
+
+function unitCost(price: number) {
+  return Math.ceil(price * (1 + COMMISSION));
+}
+
+async function askCount(
+  supabase: ReturnType<typeof db>,
+  chatId: number,
+  info: any,
+  balance: number,
+) {
+  const price = Number(info.reward);
+  const max = Math.floor(balance / unitCost(price));
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `bud:${JSON.stringify(info)}` })
+    .eq("tg_id", chatId);
+  const rows: any[] = [];
+  if (max >= 1) {
+    rows.push([{ text: `${max.toLocaleString("en-US")} (Maximum for your balance)`, callback_data: "cnt_max" }]);
+  }
+  rows.push([{ text: "⬅️ Back", callback_data: "aud_back" }]);
+  await send(
+    chatId,
+    `ℹ️ <b>Task creation commission — 15%.</b>\n\n` +
+      `<blockquote>💲 ${info.category === "bots" ? "Bot launch price" : "Task price"} — ${price.toLocaleString("en-US")} ${COIN}\n` +
+      `💰 Your balance — ${balance.toLocaleString("en-US")} ${COIN}</blockquote>\n\n` +
+      `📝 <b>Enter the number of completions or choose:</b>`,
+    { reply_markup: { inline_keyboard: rows } },
+  );
+}
+
+async function createCampaign(
+  supabase: ReturnType<typeof db>,
+  chatId: number,
+  info: any,
+  count: number,
+  balance: number,
+) {
+  const reward = Number(info.reward);
+  const total = unitCost(reward) * count;
+  if (balance < total) {
+    await send(
+      chatId,
+      `❌ Balance kam hai. Chahiye <b>${total.toLocaleString("en-US")} ${COIN}</b>, aapke paas <b>${balance.toLocaleString("en-US")} ${COIN}</b> hain.`,
+    );
+    return;
+  }
+  await supabase.from("cg_ads").insert({
+    owner_tg: chatId,
+    title: info.title ?? "Promotion",
+    link: info.link ?? "",
+    reward,
+    budget_left: reward * count,
+    category: info.category,
+  });
+  await supabase
+    .from("cg_users")
+    .update({ balance: balance - total, pending_action: null })
+    .eq("tg_id", chatId);
+  await supabase
+    .from("cg_transactions")
+    .insert({ tg_id: chatId, amount: -total, reason: `Promotion: ${info.title ?? info.category}` });
+  await send(
+    chatId,
+    `🚀 <b>Campaign live hai!</b>\n\n${info.title ?? ""}\nPrice: ${reward.toLocaleString("en-US")} ${COIN} × ${count}\nTotal (incl. 15%): ${total.toLocaleString("en-US")} ${COIN}\nAudience: ${info.audience ?? "no restrictions"}`,
+    { reply_markup: MAIN_KEYBOARD },
+  );
+}
+
+
 
 async function askAmount(supabase: ReturnType<typeof db>, chatId: number, info: any) {
   await supabase
