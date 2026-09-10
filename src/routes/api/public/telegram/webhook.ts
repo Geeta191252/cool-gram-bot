@@ -209,6 +209,8 @@ function actionVerb(category?: string) {
 }
 
 function listHeader(category?: string) {
+  if (category === "views")
+    return "To earn grams, you need to view posts, click on the buttons to view.\n\nAttention! Some posts are too long, in this case, you need to scroll it up and down.";
   if (category === "groups")
     return "⚠️ Don't leave groups earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
   if (category === "bots")
@@ -253,11 +255,21 @@ async function showTask(
   const slice = ads.slice(p * PAGE_SIZE, p * PAGE_SIZE + PAGE_SIZE);
   const verb = actionVerb(category);
   const cat = category ?? "";
+  const isViews = category === "views";
 
-  const rows: any[] = slice.map((ad) => [
-    { text: `💲 +${ad.reward.toLocaleString("en-US")} | ${verb}`, url: ad.link },
-    { text: "🔄 Check", callback_data: `done:${ad.id}` },
-  ]);
+  const rows: any[] = slice.map((ad) =>
+    isViews
+      ? [
+          {
+            text: `👁 View Post +${ad.reward.toLocaleString("en-US")} ${COIN}`,
+            callback_data: `view:${ad.id}`,
+          },
+        ]
+      : [
+          { text: `💲 +${ad.reward.toLocaleString("en-US")} | ${verb}`, url: ad.link },
+          { text: "🔄 Check", callback_data: `done:${ad.id}` },
+        ],
+  );
 
   rows.push([
     { text: "1", callback_data: `page:${cat}:0` },
@@ -266,11 +278,12 @@ async function showTask(
     { text: "▶️", callback_data: `page:${cat}:${Math.min(p + 1, totalPages - 1)}` },
     { text: `${totalPages}`, callback_data: `page:${cat}:${totalPages - 1}` },
   ]);
-  rows.push([{ text: "❌ Report", callback_data: `report:${cat}` }]);
+  if (!isViews) rows.push([{ text: "❌ Report", callback_data: `report:${cat}` }]);
   rows.push([{ text: "🔙 Back", callback_data: "earn" }]);
 
   await send(chatId, listHeader(category), { reply_markup: { inline_keyboard: rows } });
 }
+
 
 
 const PROMO_TYPES = [
