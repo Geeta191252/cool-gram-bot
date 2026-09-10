@@ -975,8 +975,21 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
 }
 
 async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
+  const msgId = cb.message?.message_id as number | undefined;
+  const cid = cb.message?.chat?.id as number | undefined;
+  const isText = typeof cb.message?.text === "string";
+  editCtx = cid && msgId && isText ? { chatId: cid, messageId: msgId, used: false } : null;
+  try {
+    await handleCallbackInner(supabase, cb);
+  } finally {
+    editCtx = null;
+  }
+}
+
+async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
   const chatId = cb.message?.chat?.id as number;
   const data = String(cb.data ?? "");
+
 
   if (data === "earn" || data === "back") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
