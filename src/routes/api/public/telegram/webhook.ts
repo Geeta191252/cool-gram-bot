@@ -831,6 +831,8 @@ async function createCampaign(
     reward,
     budget_left: reward * count,
     category: info.category,
+    src_chat: info.src_chat ?? null,
+    src_msg: info.src_msg ?? null,
     subtype:
       info.category === "bots"
         ? info.conditions
