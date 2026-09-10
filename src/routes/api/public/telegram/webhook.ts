@@ -43,6 +43,15 @@ async function tgRaw(method: string, payload: unknown) {
   }
 }
 
+function parsePostLink(link: string | null): { chat: string | number; msg: number } | null {
+  if (!link) return null;
+  const priv = link.match(/t\.me\/c\/(\d+)\/(\d+)/);
+  if (priv) return { chat: Number(`-100${priv[1]}`), msg: Number(priv[2]) };
+  const pub = link.match(/t\.me\/([A-Za-z0-9_]{4,})\/(\d+)/);
+  if (pub) return { chat: `@${pub[1]}`, msg: Number(pub[2]) };
+  return null;
+}
+
 async function tg(method: string, payload: unknown) {
   const p = payload as Record<string, any>;
   if (
