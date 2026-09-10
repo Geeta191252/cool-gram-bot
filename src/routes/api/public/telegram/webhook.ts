@@ -569,7 +569,7 @@ async function showAudienceMenu(chatId: number, current: string, extra = 25, bac
         inline_keyboard: [
           [{ text: "🌐 Allow all", callback_data: "aud_all" }],
           [{ text: "🎯 Select audience", callback_data: "aud_pick" }],
-          [{ text: "🔙 Back", callback_data: "promo_menu" }],
+          [{ text: "🔙 Back", callback_data: backTo }],
         ],
       },
     },
