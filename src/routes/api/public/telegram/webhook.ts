@@ -1138,7 +1138,8 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const isPremium = data.split(":")[1] === "premium";
     const cond = Boolean(info.conditions);
     info.audience = isPremium ? "Telegram Premium only" : "All users";
-    info.min_price = cond ? (isPremium ? 4000 : 3000) : isPremium ? 1400 : 900;
+    info.base_min_price = cond ? (isPremium ? 4000 : 3000) : isPremium ? 1400 : 900;
+    info.min_price = info.base_min_price;
     await supabase
       .from("cg_users")
       .update({ pending_action: `aud:${JSON.stringify(info)}` })
@@ -1185,9 +1186,13 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
         return;
       }
       info.audience = langs.map((c) => LANGS.find((l) => l.code === c)?.label ?? c).join(", ");
-      info.min_price = Number(info.min_price ?? 1) + extra;
+      info.base_min_price = Number(info.base_min_price ?? info.min_price ?? 1);
+      info.min_price = info.base_min_price + extra;
     } else {
       info.audience = info.audience === "Telegram Premium only" ? info.audience : "no restrictions";
+      info.langs = [];
+      info.base_min_price = Number(info.base_min_price ?? info.min_price ?? 1);
+      info.min_price = info.base_min_price;
     }
     await askPrice(supabase, chatId, info);
     return;
