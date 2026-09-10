@@ -251,6 +251,52 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     (user as any).pending_action = null;
   }
 
+  if (text === "🔙 Back" || text === "🏠 Main menu") {
+    await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+    await showPromoteMenu(supabase, chatId);
+    return;
+  }
+
+  if (user?.pending_action?.startsWith("amt:") && !isMenu && !text.startsWith("/")) {
+    const info = JSON.parse(user.pending_action.slice(4)) as {
+      category: string;
+      title: string;
+      link: string;
+    };
+    const parts = text.split("|").map((p) => p.trim());
+    const reward = Number(parts[0]);
+    const budget = Number(parts[1]);
+    if (parts.length !== 2 || !reward || !budget || reward < 1 || budget < reward) {
+      await send(chatId, "⚠️ Aise bhejein: <code>Reward | Budget</code>\nExample: <code>5 | 100</code>");
+      return;
+    }
+    if (user.balance < budget) {
+      await send(chatId, `❌ Balance kam hai. Aapke paas <b>${user.balance} ${COIN}</b> hain.`);
+      return;
+    }
+    await supabase.from("cg_ads").insert({
+      owner_tg: chatId,
+      title: info.title,
+      link: info.link,
+      reward,
+      budget_left: budget,
+      category: info.category,
+    });
+    await supabase
+      .from("cg_users")
+      .update({ balance: user.balance - budget, pending_action: null })
+      .eq("tg_id", chatId);
+    await supabase
+      .from("cg_transactions")
+      .insert({ tg_id: chatId, amount: -budget, reason: `Promotion: ${info.title}` });
+    await send(
+      chatId,
+      `🚀 <b>Campaign live hai!</b>\n\n${info.title}\nReward: ${reward} ${COIN} • Budget: ${budget} ${COIN}`,
+      { reply_markup: MAIN_KEYBOARD },
+    );
+    return;
+  }
+
   if (user?.pending_action?.startsWith("promote") && !isMenu && !text.startsWith("/")) {
     const parts = text.split("|").map((p) => p.trim());
     const [title, link, rewardRaw, budgetRaw] = parts;
