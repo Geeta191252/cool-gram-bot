@@ -248,11 +248,15 @@ const BOT_SUBTYPES: { key: string; label: string; title: string; desc: string }[
 async function showBotSubcategories(supabase: ReturnType<typeof db>, chatId: number) {
   const { data: ads } = await supabase
     .from("cg_ads")
-    .select("subtype")
+    .select("id, subtype, reward, budget_left")
     .eq("is_active", true)
-    .eq("category", "bots");
+    .eq("category", "bots")
+    .neq("owner_tg", chatId);
+  const { data: doneB } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
+  const doneSetB = new Set(((doneB ?? []) as any[]).map((d) => String(d.ad_id)));
   const counts: Record<string, number> = {};
   for (const a of (ads ?? []) as any[]) {
+    if (doneSetB.has(String(a.id)) || a.budget_left < a.reward) continue;
     const k = a.subtype ?? "plain";
     counts[k] = (counts[k] ?? 0) + 1;
   }
