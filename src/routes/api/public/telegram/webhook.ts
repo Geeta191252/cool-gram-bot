@@ -469,6 +469,33 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     return;
   }
 
+  if (user?.pending_action === "reactlink" && !isMenu && !text.startsWith("/")) {
+    const link = text.trim();
+    if (!/^https?:\/\/t\.me\/(c\/)?[A-Za-z0-9_]+\/\d+/.test(link)) {
+      await send(
+        chatId,
+        "⚠️ Sahi post link bhejein, jaise <code>https://t.me/mychannel/123</code>.",
+      );
+      return;
+    }
+    await supabase
+      .from("cg_users")
+      .update({
+        pending_action: `amt:${JSON.stringify({
+          category: "reactions",
+          title: "Post reactions",
+          link,
+        })}`,
+      })
+      .eq("tg_id", chatId);
+    await send(
+      chatId,
+      `✅ Post selected:\n${link}\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
+      { reply_markup: MAIN_KEYBOARD },
+    );
+    return;
+  }
+
   if (user?.pending_action?.startsWith("amt:") && !isMenu && !text.startsWith("/")) {
     const info = JSON.parse(user.pending_action.slice(4)) as {
       category: string;
