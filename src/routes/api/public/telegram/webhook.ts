@@ -353,17 +353,89 @@ async function handleUsersShared(supabase: ReturnType<typeof db>, chatId: number
     return;
   }
   const link = `https://t.me/${uname}`;
+  await askBotRefLink(supabase, chatId, { category: "bots", title, link });
+}
+
+async function setPending(supabase: ReturnType<typeof db>, chatId: number, prefix: string, info: any) {
   await supabase
     .from("cg_users")
-    .update({ pending_action: `amt:${JSON.stringify({ category: "bots", title, link })}` })
+    .update({ pending_action: `${prefix}:${JSON.stringify(info)}` })
     .eq("tg_id", chatId);
-
-  await send(
-    chatId,
-    `✅ Selected: <b>${title}</b>\n${link}\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
-    { reply_markup: MAIN_KEYBOARD },
-  );
 }
+
+async function getPendingInfo(supabase: ReturnType<typeof db>, chatId: number, prefix: string) {
+  const { data: u } = await supabase
+    .from("cg_users")
+    .select("pending_action")
+    .eq("tg_id", chatId)
+    .maybeSingle();
+  const pending = (u as any)?.pending_action as string | null;
+  if (!pending?.startsWith(`${prefix}:`)) return null;
+  try {
+    return JSON.parse(pending.slice(prefix.length + 1));
+  } catch {
+    return null;
+  }
+}
+
+async function askBotRefLink(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  await setPending(supabase, chatId, "botref", info);
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text:
+      "🔗 <b>Send the referral link for the selected bot</b>\n\n" +
+      "<blockquote>Example: https://t.me/gram_piarbot?start=123456789</blockquote>\n" +
+      `<blockquote><b>${info.title}</b>\n${info.link}</blockquote>`,
+    parse_mode: "HTML",
+    link_preview_options: { is_disabled: true },
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "➡️ Skip", callback_data: "botref_skip" }],
+        [{ text: "⬅️ Back", callback_data: "promo_menu" }],
+      ],
+    },
+  });
+}
+
+async function showBotTaskType(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  await setPending(supabase, chatId, "bottype", info);
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text:
+      "🤖 <b>Choose the task type:</b>\n\n" +
+      "▶️ <b>Bot start only</b> — the worker opens the bot and presses Start (+ completes a captcha or selects a language, if prompted). No other actions.\n\n" +
+      "📝 <b>With additional conditions</b> — you can request additional actions. For example, subscribing to sponsors or completing a simple action.",
+    parse_mode: "HTML",
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "▶️ Bot start only", callback_data: "bottype:start" },
+          { text: "📝 With additional conditions", callback_data: "bottype:cond" },
+        ],
+        [{ text: "⬅️ Back", callback_data: "promo_menu" }],
+      ],
+    },
+  });
+}
+
+async function showBotAudience(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  await setPending(supabase, chatId, "botaud", info);
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text:
+      `1️⃣ <b>All users</b>\nBroad reach among all COOL GRAM users.\n💡 Minimum price: 900 ${COIN}/unit.\n\n` +
+      `2️⃣ <b>Telegram Premium only</b>\nShown only to Telegram Premium users — a higher-quality audience.\n💡 Minimum price: 1,400 ${COIN}/unit.`,
+    parse_mode: "HTML",
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "1️⃣ All users", callback_data: "botaud:all" }],
+        [{ text: "2️⃣ Telegram Premium only", callback_data: "botaud:premium" }],
+        [{ text: "⬅️ Back", callback_data: "promo_menu" }],
+      ],
+    },
+  });
+}
+
 
 
 async function askReactionLink(supabase: ReturnType<typeof db>, chatId: number) {
@@ -517,23 +589,26 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       await send(chatId, "⚠️ Sahi bot username bhejein, jaise <code>@MyCoolBot</code>.");
       return;
     }
-    await supabase
-      .from("cg_users")
-      .update({
-        pending_action: `amt:${JSON.stringify({
-          category: "bots",
-          title: `@${uname}`,
-          link: `https://t.me/${uname}`,
-        })}`,
-      })
-      .eq("tg_id", chatId);
-    await send(
-      chatId,
-      `✅ Bot selected: <b>@${uname}</b>\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
-      { reply_markup: MAIN_KEYBOARD },
-    );
+    await askBotRefLink(supabase, chatId, {
+      category: "bots",
+      title: `@${uname}`,
+      link: `https://t.me/${uname}`,
+    });
     return;
   }
+
+  if (user?.pending_action?.startsWith("botref:") && !isMenu && !text.startsWith("/")) {
+    const info = JSON.parse(user.pending_action.slice(7));
+    const ref = text.trim();
+    if (!/^https?:\/\/t\.me\/[A-Za-z0-9_]+(\?start=\S+)?$/i.test(ref)) {
+      await send(chatId, "⚠️ Sahi referral link bhejein, jaise <code>https://t.me/gram_piarbot?start=123456789</code>.");
+      return;
+    }
+    info.ref_link = ref;
+    await showBotTaskType(supabase, chatId, info);
+    return;
+  }
+
 
   if (user?.pending_action === "reactlink" && !isMenu && !text.startsWith("/")) {
     const link = text.trim();
@@ -772,6 +847,43 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
   if (data === "bot_pick") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     await askBotLink(supabase, chatId);
+    return;
+  }
+
+  if (data === "botref_skip") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const info = await getPendingInfo(supabase, chatId, "botref");
+    if (!info) {
+      await showPromoteMenu(supabase, chatId);
+      return;
+    }
+    await showBotTaskType(supabase, chatId, info);
+    return;
+  }
+
+  if (data.startsWith("bottype:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const info = await getPendingInfo(supabase, chatId, "bottype");
+    if (!info) {
+      await showPromoteMenu(supabase, chatId);
+      return;
+    }
+    info.task_type = data.split(":")[1] === "start" ? "Bot start only" : "With additional conditions";
+    await showBotAudience(supabase, chatId, info);
+    return;
+  }
+
+  if (data.startsWith("botaud:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const info = await getPendingInfo(supabase, chatId, "botaud");
+    if (!info) {
+      await showPromoteMenu(supabase, chatId);
+      return;
+    }
+    const isPremium = data.split(":")[1] === "premium";
+    info.audience = isPremium ? "Telegram Premium only" : "All users";
+    info.min_price = isPremium ? 1400 : 900;
+    await askAmount(supabase, chatId, info);
     return;
   }
 
