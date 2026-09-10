@@ -401,6 +401,31 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     return;
   }
 
+  if (user?.pending_action === "botlink" && !isMenu && !text.startsWith("/")) {
+    const raw = text.trim();
+    const uname = raw.replace(/^https?:\/\/t\.me\//i, "").replace(/^@/, "").split(/[/?\s]/)[0];
+    if (!/^[A-Za-z0-9_]{4,32}$/.test(uname)) {
+      await send(chatId, "⚠️ Sahi bot username bhejein, jaise <code>@MyCoolBot</code>.");
+      return;
+    }
+    await supabase
+      .from("cg_users")
+      .update({
+        pending_action: `amt:${JSON.stringify({
+          category: "bots",
+          title: `@${uname}`,
+          link: `https://t.me/${uname}`,
+        })}`,
+      })
+      .eq("tg_id", chatId);
+    await send(
+      chatId,
+      `✅ Bot selected: <b>@${uname}</b>\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
+      { reply_markup: MAIN_KEYBOARD },
+    );
+    return;
+  }
+
   if (user?.pending_action?.startsWith("amt:") && !isMenu && !text.startsWith("/")) {
     const info = JSON.parse(user.pending_action.slice(4)) as {
       category: string;
