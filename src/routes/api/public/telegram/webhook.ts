@@ -935,7 +935,7 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
       .from("cg_users")
       .update({ pending_action: `aud:${JSON.stringify(info)}` })
       .eq("tg_id", chatId);
-    await showAudienceMenu(chatId, "no restrictions", cond ? 300 : 100);
+    await showAudienceMenu(chatId, "no restrictions", cond ? 300 : 100, "back:botaud");
 
     return;
   }
