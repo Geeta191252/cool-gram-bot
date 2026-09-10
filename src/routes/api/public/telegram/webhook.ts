@@ -616,7 +616,7 @@ const LANGS: { code: string; label: string }[] = [
   { code: "es", label: "🇪🇸 Español" },
   { code: "id", label: "🇮🇩 Bahasa Indonesia" },
   { code: "pt", label: "🇧🇷 Português" },
-  { code: "hi", label: "🇮🇳 हिंदी" },
+  { code: "hi", label: "🇮🇳 Hindi" },
   { code: "bn", label: "🇧🇩 বাংলা" },
   { code: "uz", label: "🇺🇿 O'zbekcha" },
   { code: "tr", label: "🇹🇷 Türkçe" },
