@@ -606,22 +606,22 @@ async function showAudienceMenu(chatId: number, current: string, extra = 25, bac
 }
 
 const LANGS: { code: string; label: string }[] = [
-  { code: "uk", label: "🇺🇦 Українська" },
-  { code: "ru", label: "🇷🇺 Русский" },
+  { code: "uk", label: "🇺🇦 Ukrainian" },
+  { code: "ru", label: "🇷🇺 Russian" },
   { code: "en", label: "🇬🇧 English" },
-  { code: "de", label: "🇩🇪 Deutsch" },
-  { code: "zh", label: "🇨🇳 中文" },
-  { code: "ar", label: "🇸🇦 العربية" },
-  { code: "fa", label: "🇮🇷 فارسی" },
-  { code: "es", label: "🇪🇸 Español" },
-  { code: "id", label: "🇮🇩 Bahasa Indonesia" },
-  { code: "pt", label: "🇧🇷 Português" },
+  { code: "de", label: "🇩🇪 German" },
+  { code: "zh", label: "🇨🇳 Chinese" },
+  { code: "ar", label: "🇸🇦 Arabic" },
+  { code: "fa", label: "🇮🇷 Persian" },
+  { code: "es", label: "🇪🇸 Spanish" },
+  { code: "id", label: "🇮🇩 Indonesian" },
+  { code: "pt", label: "🇧🇷 Portuguese" },
   { code: "hi", label: "🇮🇳 Hindi" },
-  { code: "bn", label: "🇧🇩 বাংলা" },
-  { code: "uz", label: "🇺🇿 O'zbekcha" },
-  { code: "tr", label: "🇹🇷 Türkçe" },
-  { code: "kk", label: "🇰🇿 Қазақша" },
-  { code: "fr", label: "🇫🇷 Français" },
+  { code: "bn", label: "🇧🇩 Bengali" },
+  { code: "uz", label: "🇺🇿 Uzbek" },
+  { code: "tr", label: "🇹🇷 Turkish" },
+  { code: "kk", label: "🇰🇿 Kazakh" },
+  { code: "fr", label: "🇫🇷 French" },
 ];
 
 async function showLanguageMenu(chatId: number, extra: number) {
