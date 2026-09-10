@@ -883,7 +883,11 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
     const isPremium = data.split(":")[1] === "premium";
     info.audience = isPremium ? "Telegram Premium only" : "All users";
     info.min_price = isPremium ? 1400 : 900;
-    await askAmount(supabase, chatId, info);
+    await supabase
+      .from("cg_users")
+      .update({ pending_action: `aud:${JSON.stringify(info)}` })
+      .eq("tg_id", chatId);
+    await showAudienceMenu(chatId, "no restrictions", 100);
     return;
   }
 
