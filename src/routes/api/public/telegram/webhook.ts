@@ -600,8 +600,13 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     (user as any).pending_action = null;
   }
 
-  if (text === "🔙 Back" || text === "🏠 Main menu") {
+  if (text === "🔙 Back" || text === "⬅️ Back" || text === "🏠 Main menu") {
+    const prev = (user as any)?.pending_action as string | null;
     await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+    if (text !== "🏠 Main menu" && prev === "botlink") {
+      await showBotPromoInfo(supabase, chatId);
+      return;
+    }
     await showPromoteMenu(supabase, chatId);
     return;
   }
