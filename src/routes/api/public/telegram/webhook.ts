@@ -1367,6 +1367,10 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await showBotPromoInfo(supabase, chatId);
       return;
     }
+    if (step === "fwd") {
+      await askForwardPost(supabase, chatId);
+      return;
+    }
     if (step.startsWith("chatpick:")) {
       const category = step.split(":")[1] || "channels";
       await askChatPicker(supabase, chatId, category, category !== "groups");
