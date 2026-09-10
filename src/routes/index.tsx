@@ -22,10 +22,10 @@ export const Route = createFileRoute("/")({
 });
 
 const steps = [
-  { icon: "💰", title: "Earnings", text: "Simple tasks poore karein aur CG coins kamayein." },
-  { icon: "📢", title: "Promote", text: "Apne coins se apna Telegram channel promote karein." },
-  { icon: "👤", title: "My Cabinet", text: "Balance, referral link aur poori activity ek jagah." },
-  { icon: "🎁", title: "Referrals", text: "Har dost invite karne par +50 CG bonus." },
+  { icon: "💰", title: "Earnings", text: "Complete simple tasks and earn CG coins." },
+  { icon: "📢", title: "Promote", text: "Use your coins to promote your Telegram channel." },
+  { icon: "👤", title: "My Cabinet", text: "Balance, referral link and all activity in one place." },
+  { icon: "🎁", title: "Referrals", text: "Get +50 CG bonus for every friend you invite." },
 ];
 
 function Index() {
@@ -39,8 +39,8 @@ function Index() {
           Advertising without a budget
         </h1>
         <p className="mt-5 max-w-xl text-base text-muted-foreground">
-          Cool Gram ek Telegram promotion platform hai. Simple tasks se CG coins kamayein aur unhi
-          coins se apna channel promote karein.
+          Cool Gram is a Telegram promotion platform. Earn CG coins with simple tasks and spend
+          them to promote your own channel.
         </p>
         <a
           href="https://t.me"
