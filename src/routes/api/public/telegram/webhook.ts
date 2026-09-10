@@ -1407,7 +1407,49 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
   }
 
 
+  if (data.startsWith("view:")) {
+    const adId = data.slice(5);
+    const { data: ad } = await supabase
+      .from("cg_ads")
+      .select("id, title, link, reward, budget_left, is_active, category")
+      .eq("id", adId)
+      .maybeSingle();
+    const a = ad as any;
+    if (!a || !a.is_active || a.budget_left < a.reward) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "This task is no longer available." });
+      return;
+    }
+    const { error } = await supabase.from("cg_completions").insert({ ad_id: adId, tg_id: chatId });
+    if (error) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Already completed." });
+      return;
+    }
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", chatId)
+      .maybeSingle();
+    await supabase
+      .from("cg_users")
+      .update({ balance: ((u as any)?.balance ?? 0) + a.reward })
+      .eq("tg_id", chatId);
+    await supabase.from("cg_ads").update({ budget_left: a.budget_left - a.reward }).eq("id", adId);
+    await supabase
+      .from("cg_transactions")
+      .insert({ tg_id: chatId, amount: a.reward, reason: `Task: ${a.title}` });
+    await tg("answerCallbackQuery", { callback_query_id: cb.id, text: `+${a.reward} ${COIN} 🎉` });
+    await tg("sendMessage", {
+      chat_id: chatId,
+      text: `👁 <b>Open the post</b>\n\n+${a.reward} ${COIN} credited.`,
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: [[{ text: "👁 Open post", url: a.link }]] },
+    });
+    await showTask(supabase, chatId, "views");
+    return;
+  }
+
   if (data.startsWith("done:")) {
+
     const adId = data.slice(5);
     const { data: ad } = await supabase
       .from("cg_ads")
