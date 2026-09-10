@@ -292,10 +292,11 @@ async function showTask(
     if (subtype === "plain") query = query.or("subtype.is.null,subtype.eq.plain");
     else query = query.eq("subtype", subtype);
   }
-  if (doneIds.length) query = query.not("id", "in", `(${doneIds.join(",")})`);
-
   const { data: allAds } = await query;
-  const ads = ((allAds ?? []) as any[]).filter((a) => a.budget_left >= a.reward);
+  const doneSet = new Set(doneIds.map(String));
+  const ads = ((allAds ?? []) as any[]).filter(
+    (a) => a.budget_left >= a.reward && !doneSet.has(String(a.id)),
+  );
 
   if (!ads.length) {
     await send(
