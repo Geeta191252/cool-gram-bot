@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { createHash, timingSafeEqual } from "crypto";
 
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/telegram";
 const COIN = "CG";
 const SIGNUP_BONUS = 25;
 const REFERRAL_BONUS = 50;
@@ -24,13 +23,10 @@ function db() {
 }
 
 async function tg(method: string, payload: unknown) {
-  const res = await fetch(`${GATEWAY_URL}/${method}`, {
+  const token = process.env["COOLGRAM_BOT_TOKEN"];
+  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env["LOVABLE_API_KEY"]}`,
-      "X-Connection-Api-Key": `${process.env["TELEGRAM_API_KEY"]}`,
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   const body = await res.text();
@@ -41,6 +37,7 @@ async function tg(method: string, payload: unknown) {
     return null;
   }
 }
+
 
 const MAIN_KEYBOARD = {
   keyboard: [
