@@ -606,36 +606,46 @@ async function showAudienceMenu(chatId: number, current: string, extra = 25, bac
 }
 
 const LANGS: { code: string; label: string }[] = [
-  { code: "uk", label: "🇺🇦 Ukrainian" },
-  { code: "ru", label: "🇷🇺 Russian" },
+  { code: "uk", label: "🇺🇦 Українська" },
+  { code: "ru", label: "🇷🇺 Русский" },
   { code: "en", label: "🇬🇧 English" },
-  { code: "de", label: "🇩🇪 German" },
-  { code: "zh", label: "🇨🇳 Chinese" },
-  { code: "ar", label: "🇸🇦 Arabic" },
-  { code: "fa", label: "🇮🇷 Persian" },
-  { code: "es", label: "🇪🇸 Spanish" },
-  { code: "id", label: "🇮🇩 Indonesian" },
-  { code: "pt", label: "🇧🇷 Portuguese" },
-  { code: "hi", label: "🇮🇳 Hindi" },
-  { code: "bn", label: "🇧🇩 Bengali" },
-  { code: "uz", label: "🇺🇿 Uzbek" },
-  { code: "tr", label: "🇹🇷 Turkish" },
-  { code: "kk", label: "🇰🇿 Kazakh" },
-  { code: "fr", label: "🇫🇷 French" },
+  { code: "de", label: "🇩🇪 Deutsch" },
+  { code: "zh", label: "🇨🇳 中文" },
+  { code: "ar", label: "🇸🇦 العربية" },
+  { code: "fa", label: "🇮🇷 فارسی" },
+  { code: "es", label: "🇪🇸 Español" },
+  { code: "id", label: "🇮🇩 Bahasa Indonesia" },
+  { code: "pt", label: "🇧🇷 Português" },
+  { code: "hi", label: "🇮🇳 हिंदी" },
+  { code: "bn", label: "🇧🇩 বাংলা" },
+  { code: "uz", label: "🇺🇿 O'zbekcha" },
+  { code: "tr", label: "🇹🇷 Türkçe" },
+  { code: "kk", label: "🇰🇿 Қазақша" },
+  { code: "fr", label: "🇫🇷 Français" },
 ];
 
-async function showLanguageMenu(chatId: number, extra: number) {
+async function showLanguageMenu(chatId: number, extra: number, selected: string[] = []) {
   const rows: any[] = [];
   for (let i = 0; i < LANGS.length; i += 3) {
-    rows.push(LANGS.slice(i, i + 3).map((l) => ({ text: l.label, callback_data: `aud_set:${l.code}` })));
+    rows.push(
+      LANGS.slice(i, i + 3).map((l) => ({
+        text: selected.includes(l.code) ? `☑️ ${l.label}` : l.label,
+        callback_data: `aud_set:${l.code}`,
+      })),
+    );
   }
+  if (selected.length) rows.push([{ text: "✅ Save and continue", callback_data: "aud_save" }]);
   rows.push([{ text: "🔙 Back", callback_data: "aud_back" }]);
+  const chosen = selected.length
+    ? selected.map((c) => LANGS.find((l) => l.code === c)?.label ?? c).join("\n")
+    : "no restrictions";
   await send(
     chatId,
-    `• Audience: no restrictions\n\n🌐 <b>Choose one or more languages</b>\n💡 The audience filter adds <b>+${extra} ${COIN}</b> to the min. price per completion.`,
+    `• Audience:\n${chosen}\n\n🌐 <b>Choose one or more languages</b>\n💡 The audience filter adds <b>+${extra} ${COIN}</b> to the min. price per completion.`,
     { reply_markup: { inline_keyboard: rows } },
   );
 }
+
 
 function unitName(category: string) {
   if (category === "bots") return "1 bot visit";
