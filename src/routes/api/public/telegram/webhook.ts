@@ -633,6 +633,19 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     return;
   }
 
+  if (user?.pending_action?.startsWith("botcond:") && !isMenu && !text.startsWith("/")) {
+    const info = JSON.parse(user.pending_action.slice(8));
+    const cond = text.trim();
+    if (cond.length > 400) {
+      await send(chatId, "⚠️ Conditions 400 characters se zyada nahi ho sakti. Chhota karke bhejein.");
+      return;
+    }
+    info.conditions = cond;
+    await showBotAudience(supabase, chatId, info);
+    return;
+  }
+
+
 
   if (user?.pending_action === "reactlink" && !isMenu && !text.startsWith("/")) {
     const link = text.trim();
