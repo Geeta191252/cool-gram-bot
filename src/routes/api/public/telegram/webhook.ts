@@ -197,7 +197,33 @@ async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
   });
 }
 
-async function showTask(supabase: ReturnType<typeof db>, chatId: number, category?: string) {
+const PAGE_SIZE = 10;
+
+function actionVerb(category?: string) {
+  if (category === "groups") return "Join";
+  if (category === "views") return "View";
+  if (category === "bots") return "Start";
+  if (category === "reactions") return "React";
+  if (category === "boost") return "Boost";
+  return "Subscribe";
+}
+
+function listHeader(category?: string) {
+  if (category === "groups")
+    return "⚠️ Don't leave groups earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
+  if (category === "bots")
+    return "⚠️ Don't stop or delete the bots earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
+  if (category === "reactions")
+    return "⚠️ Don't remove your reaction earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
+  return "⚠️ Don't leave channels earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
+}
+
+async function showTask(
+  supabase: ReturnType<typeof db>,
+  chatId: number,
+  category?: string,
+  page = 0,
+) {
   const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
   const doneIds = (done ?? []).map((d: any) => d.ad_id);
 
@@ -206,34 +232,46 @@ async function showTask(supabase: ReturnType<typeof db>, chatId: number, categor
     .select("id, title, link, reward, budget_left")
     .eq("is_active", true)
     .neq("owner_tg", chatId)
-    .order("created_at", { ascending: true })
-    .limit(1);
+    .order("reward", { ascending: false });
   if (category) query = query.eq("category", category);
   if (doneIds.length) query = query.not("id", "in", `(${doneIds.join(",")})`);
 
-  const { data: ads } = await query;
-  const ad = ads?.[0] as any;
+  const { data: allAds } = await query;
+  const ads = ((allAds ?? []) as any[]).filter((a) => a.budget_left >= a.reward);
 
-  if (!ad || ad.budget_left < ad.reward) {
+  if (!ads.length) {
     await send(
       chatId,
-      "😴 <b>Is category mein abhi koi task nahi hai.</b>\n\nThodi der baad wapas aayein — naye tasks har roz add hote hain.",
+      "😴 <b>No tasks available in this category right now.</b>\n\nCome back a bit later — new tasks are added every day.",
       { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
     );
     return;
   }
 
-  await send(chatId, `💰 <b>${ad.title}</b>\n\nReward: <b>+${ad.reward} ${COIN}</b>\n\nChannel join karein, phir "I did it" dabayein.`, {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "🔗 Open channel", url: ad.link }],
-        [{ text: "✅ I did it", callback_data: `done:${ad.id}` }],
-        [{ text: "⏭ Skip", callback_data: `next:${category ?? ""}` }],
-        [{ text: "🔙 Back", callback_data: "earn" }],
-      ],
-    },
-  });
+  const totalPages = Math.max(1, Math.ceil(ads.length / PAGE_SIZE));
+  const p = Math.min(Math.max(page, 0), totalPages - 1);
+  const slice = ads.slice(p * PAGE_SIZE, p * PAGE_SIZE + PAGE_SIZE);
+  const verb = actionVerb(category);
+  const cat = category ?? "";
+
+  const rows: any[] = slice.map((ad) => [
+    { text: `💲 +${ad.reward.toLocaleString("en-US")} | ${verb}`, url: ad.link },
+    { text: "🔄 Check", callback_data: `done:${ad.id}` },
+  ]);
+
+  rows.push([
+    { text: "1", callback_data: `page:${cat}:0` },
+    { text: "◀️", callback_data: `page:${cat}:${Math.max(p - 1, 0)}` },
+    { text: `${p + 1}`, callback_data: "noop" },
+    { text: "▶️", callback_data: `page:${cat}:${Math.min(p + 1, totalPages - 1)}` },
+    { text: `${totalPages}`, callback_data: `page:${cat}:${totalPages - 1}` },
+  ]);
+  rows.push([{ text: "❌ Report", callback_data: `report:${cat}` }]);
+  rows.push([{ text: "🔙 Back", callback_data: "earn" }]);
+
+  await send(chatId, listHeader(category), { reply_markup: { inline_keyboard: rows } });
 }
+
 
 const PROMO_TYPES = [
   { key: "channels", label: "📣 Channel" },
@@ -1327,6 +1365,27 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+  if (data === "noop") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    return;
+  }
+
+  if (data.startsWith("report:")) {
+    await tg("answerCallbackQuery", {
+      callback_query_id: cb.id,
+      text: "Report sent to moderators. Thank you!",
+      show_alert: true,
+    });
+    return;
+  }
+
+  if (data.startsWith("page:")) {
+    const [, cat, pg] = data.split(":");
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await showTask(supabase, chatId, cat || undefined, Number(pg) || 0);
+    return;
+  }
+
   if (data.startsWith("cat:") || data.startsWith("next:")) {
     const category = data.split(":")[1] || undefined;
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
@@ -1334,11 +1393,12 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+
   if (data.startsWith("done:")) {
     const adId = data.slice(5);
     const { data: ad } = await supabase
       .from("cg_ads")
-      .select("id, title, reward, budget_left, is_active")
+      .select("id, title, reward, budget_left, is_active, category")
       .eq("id", adId)
       .maybeSingle();
 
@@ -1374,7 +1434,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
 
     await tg("answerCallbackQuery", { callback_query_id: cb.id, text: `+${reward} ${COIN} 🎉` });
     await send(chatId, `✅ Task complete! <b>+${reward} ${COIN}</b> credited.`);
-    await showTask(supabase, chatId);
+    await showTask(supabase, chatId, (ad as any).category);
   }
 }
 
