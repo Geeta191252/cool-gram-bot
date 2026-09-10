@@ -206,6 +206,40 @@ async function showTask(supabase: ReturnType<typeof db>, chatId: number, categor
   });
 }
 
+const PROMO_TYPES = [
+  { key: "channels", label: "📣 Channel" },
+  { key: "groups", label: "👥 Group" },
+  { key: "views", label: "👁 Post" },
+  { key: "bots", label: "🤖 Bot" },
+  { key: "boost", label: "⚡ Premium boost (channel)" },
+  { key: "reactions", label: "💙 Reactions" },
+];
+
+async function showPromoteMenu(supabase: ReturnType<typeof db>, chatId: number) {
+  const { data: u } = await supabase
+    .from("cg_users")
+    .select("balance")
+    .eq("tg_id", chatId)
+    .maybeSingle();
+  const balance = (u as any)?.balance ?? 0;
+
+  const rows: any[] = [];
+  for (let i = 0; i < PROMO_TYPES.length; i += 2) {
+    rows.push(
+      PROMO_TYPES.slice(i, i + 2).map((t) => ({ text: t.label, callback_data: `promo:${t.key}` })),
+    );
+  }
+  rows.push([{ text: "⚙️ Auto-task settings", callback_data: "promo_auto" }]);
+  rows.push([
+    { text: "📋 My Tasks", callback_data: "promo_mine" },
+    { text: "🔙 Back", callback_data: "back" },
+  ]);
+
+  await send(chatId, `🅰️ <b>What do you want to promote?</b>\n\n💲 Balance: <b>${balance} ${COIN}</b>`, {
+    reply_markup: { inline_keyboard: rows },
+  });
+}
+
 async function handleText(supabase: ReturnType<typeof db>, chatId: number, from: any, text: string) {
   const startPayload = text.startsWith("/start") ? text.split(" ")[1] : undefined;
   const { user, isNew } = await getUser(supabase, from, startPayload);
@@ -217,7 +251,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     (user as any).pending_action = null;
   }
 
-  if (user?.pending_action === "promote" && !isMenu && !text.startsWith("/")) {
+  if (user?.pending_action?.startsWith("promote") && !isMenu && !text.startsWith("/")) {
     const parts = text.split("|").map((p) => p.trim());
     const [title, link, rewardRaw, budgetRaw] = parts;
     const reward = Number(rewardRaw);
@@ -236,6 +270,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       link,
       reward,
       budget_left: budget,
+      category: user.pending_action?.split(":")[1] || "channels",
     });
     await supabase
       .from("cg_users")
@@ -268,11 +303,8 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       await showCategories(supabase, chatId);
       return;
     case "📢 Promote":
-      await supabase.from("cg_users").update({ pending_action: "promote" }).eq("tg_id", chatId);
-      await send(
-        chatId,
-        `📢 <b>Promote your channel</b>\n\nEk line mein bhejein:\n<code>Title | Link | Reward | Budget</code>\n\nExample:\n<code>My Channel | https://t.me/mychannel | 5 | 100</code>\n\nBalance: <b>${user.balance} ${COIN}</b>`,
-      );
+      await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+      await showPromoteMenu(supabase, chatId);
       return;
     case "🧾 Checks": {
       const { data: tx } = await supabase
@@ -354,6 +386,54 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
       `📝 <b>Rules</b>\n\n1️⃣ Task khol kar channel/group join karein, phir "I did it" dabayein.\n2️⃣ Join karne ke baad turant leave na karein.\n3️⃣ Ek task sirf ek baar count hota hai.\n4️⃣ Cheating par balance zero ho sakta hai.`,
       { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
     );
+    return;
+  }
+
+  if (data.startsWith("promo:")) {
+    const key = data.split(":")[1];
+    const type = PROMO_TYPES.find((t) => t.key === key);
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await supabase.from("cg_users").update({ pending_action: `promote:${key}` }).eq("tg_id", chatId);
+    await send(
+      chatId,
+      `${type?.label ?? "📢 Promotion"}\n\nEk line mein bhejein:\n<code>Title | Link | Reward | Budget</code>\n\nExample:\n<code>My Channel | https://t.me/mychannel | 5 | 100</code>`,
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "promo_menu" }]] } },
+    );
+    return;
+  }
+
+  if (data === "promo_menu") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+    await showPromoteMenu(supabase, chatId);
+    return;
+  }
+
+  if (data === "promo_auto") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await send(
+      chatId,
+      "⚙️ <b>Auto-task settings</b>\n\nAuto-repeat tasks jaldi aa rahe hain. Abhi aap manually campaign bana sakte hain.",
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "promo_menu" }]] } },
+    );
+    return;
+  }
+
+  if (data === "promo_mine") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const { data: mine } = await supabase
+      .from("cg_ads")
+      .select("title, reward, budget_left, is_active, category")
+      .eq("owner_tg", chatId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    const lines = (mine ?? []).map(
+      (a: any) =>
+        `${a.is_active ? "🟢" : "⚪️"} <b>${a.title}</b> · ${a.category}\n   Reward ${a.reward} ${COIN} • Left ${a.budget_left} ${COIN}`,
+    );
+    await send(chatId, `📋 <b>My Tasks</b>\n\n${lines.length ? lines.join("\n") : "Abhi koi campaign nahi hai."}`, {
+      reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "promo_menu" }]] },
+    });
     return;
   }
 
