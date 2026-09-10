@@ -434,7 +434,7 @@ async function askBotConditions(supabase: ReturnType<typeof db>, chatId: number,
       "No more than 400 characters.",
     parse_mode: "HTML",
     link_preview_options: { is_disabled: true },
-    reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "promo_menu" }]] },
+    reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "back:bottype" }]] },
   });
 }
 
