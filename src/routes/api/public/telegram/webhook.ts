@@ -284,6 +284,45 @@ async function askChatPicker(
   });
 }
 
+async function showBotPromoInfo(supabase: ReturnType<typeof db>, chatId: number) {
+  await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text:
+      "🤖 <b>Choose the bot you want to promote</b>\n\n" +
+      "<blockquote>❓ <b>What should you know?</b>\n" +
+      "• A user can complete a task for this bot only once in COOL GRAM.\n" +
+      "• Every completion can be checked for correctness before payment.\n" +
+      "• A user may have started the bot previously outside COOL GRAM — such completions are paid.\n\n" +
+      "⛔️ <b>You cannot advertise:</b>\n" +
+      "• 18+ and erotic content\n" +
+      "• Scams, pyramid schemes, deception\n" +
+      "• Casinos, betting, artificial boosting\n" +
+      "• Piracy, cracked content\n" +
+      "• Phishing, account theft, malware\n" +
+      "• Doxxing, other people's personal data</blockquote>",
+    parse_mode: "HTML",
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "🤖 Choose bot", callback_data: "bot_pick" },
+          { text: "⬅️ Back", callback_data: "promo_menu" },
+        ],
+      ],
+    },
+  });
+}
+
+async function askBotLink(supabase: ReturnType<typeof db>, chatId: number) {
+  await supabase.from("cg_users").update({ pending_action: "botlink" }).eq("tg_id", chatId);
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text: "🤖 <b>Send your bot's username or link</b>\n\nExample: <code>@MyCoolBot</code> ya <code>https://t.me/MyCoolBot</code>",
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "promo:bots" }]] },
+  });
+}
+
 async function askForwardPost(supabase: ReturnType<typeof db>, chatId: number) {
   await supabase.from("cg_users").update({ pending_action: "fwd:views" }).eq("tg_id", chatId);
   await tg("sendMessage", {
