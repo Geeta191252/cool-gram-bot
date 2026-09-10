@@ -793,6 +793,7 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
             const chatId = message?.chat?.id;
             const text = message?.text;
             const shared = message?.chat_shared;
+            const usersShared = message?.users_shared;
             const forwarded = message?.forward_origin ?? message?.forward_from_chat;
             let pending: string | null = null;
             if (chatId && forwarded) {
@@ -803,7 +804,8 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
                 .maybeSingle();
               pending = ((u as any)?.pending_action as string | null) ?? null;
             }
-            if (chatId && shared) await handleChatShared(supabase, chatId, shared);
+            if (chatId && usersShared) await handleUsersShared(supabase, chatId, usersShared);
+            else if (chatId && shared) await handleChatShared(supabase, chatId, shared);
             else if (chatId && forwarded && pending === "fwd:views")
               await handleForwardedPost(supabase, chatId, message);
             else if (chatId && text) await handleText(supabase, chatId, message.from ?? {}, text.trim());
