@@ -509,7 +509,11 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
     const key = data.split(":")[1];
     const type = PROMO_TYPES.find((t) => t.key === key);
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    if (key === "channels" || key === "groups" || key === "boost" || key === "reactions" || key === "views") {
+    if (key === "views") {
+      await askForwardPost(supabase, chatId);
+      return;
+    }
+    if (key === "channels" || key === "groups" || key === "boost" || key === "reactions") {
       await askChatPicker(supabase, chatId, key, key !== "groups");
       return;
     }
