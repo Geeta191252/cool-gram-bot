@@ -1365,12 +1365,34 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+  if (data === "noop") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    return;
+  }
+
+  if (data.startsWith("report:")) {
+    await tg("answerCallbackQuery", {
+      callback_query_id: cb.id,
+      text: "Report sent to moderators. Thank you!",
+      show_alert: true,
+    });
+    return;
+  }
+
+  if (data.startsWith("page:")) {
+    const [, cat, pg] = data.split(":");
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await showTask(supabase, chatId, cat || undefined, Number(pg) || 0);
+    return;
+  }
+
   if (data.startsWith("cat:") || data.startsWith("next:")) {
     const category = data.split(":")[1] || undefined;
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     await showTask(supabase, chatId, category);
     return;
   }
+
 
   if (data.startsWith("done:")) {
     const adId = data.slice(5);
