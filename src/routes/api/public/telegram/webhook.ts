@@ -606,36 +606,46 @@ async function showAudienceMenu(chatId: number, current: string, extra = 25, bac
 }
 
 const LANGS: { code: string; label: string }[] = [
-  { code: "uk", label: "🇺🇦 Ukrainian" },
-  { code: "ru", label: "🇷🇺 Russian" },
+  { code: "uk", label: "🇺🇦 Українська" },
+  { code: "ru", label: "🇷🇺 Русский" },
   { code: "en", label: "🇬🇧 English" },
-  { code: "de", label: "🇩🇪 German" },
-  { code: "zh", label: "🇨🇳 Chinese" },
-  { code: "ar", label: "🇸🇦 Arabic" },
-  { code: "fa", label: "🇮🇷 Persian" },
-  { code: "es", label: "🇪🇸 Spanish" },
-  { code: "id", label: "🇮🇩 Indonesian" },
-  { code: "pt", label: "🇧🇷 Portuguese" },
-  { code: "hi", label: "🇮🇳 Hindi" },
-  { code: "bn", label: "🇧🇩 Bengali" },
-  { code: "uz", label: "🇺🇿 Uzbek" },
-  { code: "tr", label: "🇹🇷 Turkish" },
-  { code: "kk", label: "🇰🇿 Kazakh" },
-  { code: "fr", label: "🇫🇷 French" },
+  { code: "de", label: "🇩🇪 Deutsch" },
+  { code: "zh", label: "🇨🇳 中文" },
+  { code: "ar", label: "🇸🇦 العربية" },
+  { code: "fa", label: "🇮🇷 فارسی" },
+  { code: "es", label: "🇪🇸 Español" },
+  { code: "id", label: "🇮🇩 Bahasa Indonesia" },
+  { code: "pt", label: "🇧🇷 Português" },
+  { code: "hi", label: "🇮🇳 हिंदी" },
+  { code: "bn", label: "🇧🇩 বাংলা" },
+  { code: "uz", label: "🇺🇿 O'zbekcha" },
+  { code: "tr", label: "🇹🇷 Türkçe" },
+  { code: "kk", label: "🇰🇿 Қазақша" },
+  { code: "fr", label: "🇫🇷 Français" },
 ];
 
-async function showLanguageMenu(chatId: number, extra: number) {
+async function showLanguageMenu(chatId: number, extra: number, selected: string[] = []) {
   const rows: any[] = [];
   for (let i = 0; i < LANGS.length; i += 3) {
-    rows.push(LANGS.slice(i, i + 3).map((l) => ({ text: l.label, callback_data: `aud_set:${l.code}` })));
+    rows.push(
+      LANGS.slice(i, i + 3).map((l) => ({
+        text: selected.includes(l.code) ? `☑️ ${l.label}` : l.label,
+        callback_data: `aud_set:${l.code}`,
+      })),
+    );
   }
+  if (selected.length) rows.push([{ text: "✅ Save and continue", callback_data: "aud_save" }]);
   rows.push([{ text: "🔙 Back", callback_data: "aud_back" }]);
+  const chosen = selected.length
+    ? selected.map((c) => LANGS.find((l) => l.code === c)?.label ?? c).join("\n")
+    : "no restrictions";
   await send(
     chatId,
-    `• Audience: no restrictions\n\n🌐 <b>Choose one or more languages</b>\n💡 The audience filter adds <b>+${extra} ${COIN}</b> to the min. price per completion.`,
+    `• Audience:\n${chosen}\n\n🌐 <b>Choose one or more languages</b>\n💡 The audience filter adds <b>+${extra} ${COIN}</b> to the min. price per completion.`,
     { reply_markup: { inline_keyboard: rows } },
   );
 }
+
 
 function unitName(category: string) {
   if (category === "bots") return "1 bot visit";
@@ -705,7 +715,7 @@ async function createCampaign(
   if (balance < total) {
     await send(
       chatId,
-      `❌ Balance kam hai. Chahiye <b>${total.toLocaleString("en-US")} ${COIN}</b>, aapke paas <b>${balance.toLocaleString("en-US")} ${COIN}</b> hain.`,
+      `❌ Insufficient balance. Required <b>${total.toLocaleString("en-US")} ${COIN}</b>, you have <b>${balance.toLocaleString("en-US")} ${COIN}</b>.`,
     );
     return;
   }
@@ -878,7 +888,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       return;
     }
     if (user.balance < budget) {
-      await send(chatId, `❌ Balance kam hai. Aapke paas <b>${user.balance} ${COIN}</b> hain.`);
+      await send(chatId, `❌ Insufficient balance. You have <b>${user.balance} ${COIN}</b>.`);
       return;
     }
     await supabase.from("cg_ads").insert({
@@ -914,7 +924,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       return;
     }
     if (user.balance < budget) {
-      await send(chatId, `❌ Balance kam hai. Aapke paas <b>${user.balance} ${COIN}</b> hain, chahiye <b>${budget} ${COIN}</b>.`);
+      await send(chatId, `❌ Insufficient balance. You have <b>${user.balance} ${COIN}</b>, required <b>${budget} ${COIN}</b>.`);
       return;
     }
     await supabase.from("cg_ads").insert({
@@ -1138,7 +1148,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
-  if (data === "aud_all" || data === "aud_pick" || data.startsWith("aud_set:")) {
+  if (data === "aud_all" || data === "aud_pick" || data === "aud_save" || data.startsWith("aud_set:")) {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     const { data: u } = await supabase
       .from("cg_users")
@@ -1153,22 +1163,36 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const info = JSON.parse(pending.slice(4));
     const cond = Boolean(info.conditions);
     const extra = info.category === "bots" ? (cond ? 300 : 100) : 25;
+    const langs: string[] = Array.isArray(info.langs) ? info.langs : [];
     if (data === "aud_pick") {
-      await showLanguageMenu(chatId, extra);
+      await showLanguageMenu(chatId, extra, langs);
       return;
     }
-    if (data === "aud_all") {
-      info.audience = info.audience === "Telegram Premium only" ? info.audience : "no restrictions";
-    } else {
+    if (data.startsWith("aud_set:")) {
       const code = data.split(":")[1] ?? "en";
-      const lang = LANGS.find((l) => l.code === code);
-      info.audience = lang ? lang.label : code;
+      const next = langs.includes(code) ? langs.filter((c) => c !== code) : [...langs, code];
+      info.langs = next;
+      await supabase
+        .from("cg_users")
+        .update({ pending_action: `aud:${JSON.stringify(info)}` })
+        .eq("tg_id", chatId);
+      await showLanguageMenu(chatId, extra, next);
+      return;
+    }
+    if (data === "aud_save") {
+      if (!langs.length) {
+        await showLanguageMenu(chatId, extra, langs);
+        return;
+      }
+      info.audience = langs.map((c) => LANGS.find((l) => l.code === c)?.label ?? c).join(", ");
       info.min_price = Number(info.min_price ?? 1) + extra;
+    } else {
+      info.audience = info.audience === "Telegram Premium only" ? info.audience : "no restrictions";
     }
     await askPrice(supabase, chatId, info);
     return;
-
   }
+
 
   if (data === "cnt_max") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
@@ -1182,7 +1206,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     if (!info) return;
     const max = Math.floor(balance / unitCost(Number(info.reward)));
     if (max < 1) {
-      await send(chatId, "❌ Balance kam hai.");
+      await send(chatId, "❌ Insufficient balance.");
       return;
     }
     await createCampaign(supabase, chatId, info, max, balance);
