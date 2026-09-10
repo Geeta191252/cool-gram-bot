@@ -317,11 +317,54 @@ async function askBotLink(supabase: ReturnType<typeof db>, chatId: number) {
   await supabase.from("cg_users").update({ pending_action: "botlink" }).eq("tg_id", chatId);
   await tg("sendMessage", {
     chat_id: chatId,
-    text: "🤖 <b>Send your bot's username or link</b>\n\nExample: <code>@MyCoolBot</code> ya <code>https://t.me/MyCoolBot</code>",
-    parse_mode: "HTML",
-    reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "promo:bots" }]] },
+    text: "🤖 Select a bot.",
+    reply_markup: {
+      keyboard: [
+        [
+          {
+            text: "🤖 Select a bot.",
+            request_users: {
+              request_id: 7,
+              user_is_bot: true,
+              max_quantity: 1,
+              request_name: true,
+              request_username: true,
+            },
+          },
+        ],
+        [{ text: "⬅️ Back" }],
+      ],
+      resize_keyboard: true,
+      one_time_keyboard: true,
+    },
   });
 }
+
+async function handleUsersShared(supabase: ReturnType<typeof db>, chatId: number, shared: any) {
+  const picked = (shared.users ?? shared.user_ids ?? [])[0];
+  const uname = typeof picked === "object" ? picked?.username : undefined;
+  const title = (typeof picked === "object" ? picked?.first_name : undefined) ?? uname ?? "My bot";
+  if (!uname) {
+    await send(
+      chatId,
+      "⚠️ Us bot ka username nahi mila. Uska username ya link bhejein:\n<code>@MyCoolBot</code>",
+      { reply_markup: MAIN_KEYBOARD },
+    );
+    return;
+  }
+  const link = `https://t.me/${uname}`;
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `amt:${JSON.stringify({ category: "bots", title, link })}` })
+    .eq("tg_id", chatId);
+
+  await send(
+    chatId,
+    `✅ Selected: <b>${title}</b>\n${link}\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
+    { reply_markup: MAIN_KEYBOARD },
+  );
+}
+
 
 async function askForwardPost(supabase: ReturnType<typeof db>, chatId: number) {
   await supabase.from("cg_users").update({ pending_action: "fwd:views" }).eq("tg_id", chatId);
