@@ -467,7 +467,7 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
 async function showAudienceMenu(chatId: number, current: string) {
   await send(
     chatId,
-    `🎯 <b>Task audience</b>\nCurrent: ${current}\n\nChoose who can access the task:\n💡 The audience filter adds <b>+100 ${COIN}</b> to the min. price per completion.`,
+    `🎯 <b>Task audience</b>\nCurrent: ${current}\n\nChoose who can access the task:\n💡 The audience filter adds <b>+25 ${COIN}</b> to the min. price per completion.`,
     {
       reply_markup: {
         inline_keyboard: [
