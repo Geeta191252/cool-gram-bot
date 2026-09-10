@@ -973,7 +973,61 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
 
   if (data === "aud_back") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    await showAudienceMenu(chatId, "no restrictions");
+    const info = await getPendingInfo(supabase, chatId, "aud");
+    const cond = Boolean(info?.conditions);
+    const backTo =
+      info?.category === "bots" ? "back:botaud" : `back:chatpick:${info?.category ?? "channels"}`;
+    await showAudienceMenu(chatId, "no restrictions", info?.category === "bots" ? (cond ? 300 : 100) : 25, backTo);
+    return;
+  }
+
+  // Step-by-step back navigation (ek step peeche)
+  if (data.startsWith("back:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const step = data.slice(5);
+
+    if (step === "botpick") {
+      await askBotLink(supabase, chatId);
+      return;
+    }
+    if (step === "botinfo") {
+      await showBotPromoInfo(supabase, chatId);
+      return;
+    }
+    if (step.startsWith("chatpick:")) {
+      const category = step.split(":")[1] || "channels";
+      await askChatPicker(supabase, chatId, category, category !== "groups");
+      return;
+    }
+
+    // In steps ke liye pehle wale screen ka data chahiye
+    const current =
+      (await getPendingInfo(supabase, chatId, "aud")) ??
+      (await getPendingInfo(supabase, chatId, "botaud")) ??
+      (await getPendingInfo(supabase, chatId, "botcond")) ??
+      (await getPendingInfo(supabase, chatId, "bottype")) ??
+      (await getPendingInfo(supabase, chatId, "botref"));
+    if (!current) {
+      await showPromoteMenu(supabase, chatId);
+      return;
+    }
+    if (step === "botref") {
+      await askBotRefLink(supabase, chatId, current);
+      return;
+    }
+    if (step === "bottype") {
+      await showBotTaskType(supabase, chatId, current);
+      return;
+    }
+    if (step === "botcond") {
+      await askBotConditions(supabase, chatId, current);
+      return;
+    }
+    if (step === "botaud") {
+      await showBotAudience(supabase, chatId, current);
+      return;
+    }
+    await showPromoteMenu(supabase, chatId);
     return;
   }
 
