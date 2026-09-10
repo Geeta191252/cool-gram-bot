@@ -366,6 +366,19 @@ async function handleUsersShared(supabase: ReturnType<typeof db>, chatId: number
 }
 
 
+async function askReactionLink(supabase: ReturnType<typeof db>, chatId: number) {
+  await supabase.from("cg_users").update({ pending_action: "reactlink" }).eq("tg_id", chatId);
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text:
+      "🔗 <b>Send the link to the post you want reactions for.</b>\n\n" +
+      "💡 Not sure how to copy a link? Watch the <a href=\"https://telegram.org/faq#q-what-are-message-links\">guide</a> 🎥.",
+    parse_mode: "HTML",
+    link_preview_options: { is_disabled: true },
+    reply_markup: { inline_keyboard: [[{ text: "⬅️ Back", callback_data: "promo_menu" }]] },
+  });
+}
+
 async function askForwardPost(supabase: ReturnType<typeof db>, chatId: number) {
   await supabase.from("cg_users").update({ pending_action: "fwd:views" }).eq("tg_id", chatId);
   await tg("sendMessage", {
