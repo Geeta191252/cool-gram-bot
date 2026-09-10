@@ -206,6 +206,40 @@ async function showTask(supabase: ReturnType<typeof db>, chatId: number, categor
   });
 }
 
+const PROMO_TYPES = [
+  { key: "channels", label: "📣 Channel" },
+  { key: "groups", label: "👥 Group" },
+  { key: "views", label: "👁 Post" },
+  { key: "bots", label: "🤖 Bot" },
+  { key: "boost", label: "⚡ Premium boost (channel)" },
+  { key: "reactions", label: "💙 Reactions" },
+];
+
+async function showPromoteMenu(supabase: ReturnType<typeof db>, chatId: number) {
+  const { data: u } = await supabase
+    .from("cg_users")
+    .select("balance")
+    .eq("tg_id", chatId)
+    .maybeSingle();
+  const balance = (u as any)?.balance ?? 0;
+
+  const rows: any[] = [];
+  for (let i = 0; i < PROMO_TYPES.length; i += 2) {
+    rows.push(
+      PROMO_TYPES.slice(i, i + 2).map((t) => ({ text: t.label, callback_data: `promo:${t.key}` })),
+    );
+  }
+  rows.push([{ text: "⚙️ Auto-task settings", callback_data: "promo_auto" }]);
+  rows.push([
+    { text: "📋 My Tasks", callback_data: "promo_mine" },
+    { text: "🔙 Back", callback_data: "back" },
+  ]);
+
+  await send(chatId, `🅰️ <b>What do you want to promote?</b>\n\n💲 Balance: <b>${balance} ${COIN}</b>`, {
+    reply_markup: { inline_keyboard: rows },
+  });
+}
+
 async function handleText(supabase: ReturnType<typeof db>, chatId: number, from: any, text: string) {
   const startPayload = text.startsWith("/start") ? text.split(" ")[1] : undefined;
   const { user, isNew } = await getUser(supabase, from, startPayload);
