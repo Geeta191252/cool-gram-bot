@@ -269,11 +269,8 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       await showCategories(supabase, chatId);
       return;
     case "📢 Promote":
-      await supabase.from("cg_users").update({ pending_action: "promote" }).eq("tg_id", chatId);
-      await send(
-        chatId,
-        `📢 <b>Promote your channel</b>\n\nEk line mein bhejein:\n<code>Title | Link | Reward | Budget</code>\n\nExample:\n<code>My Channel | https://t.me/mychannel | 5 | 100</code>\n\nBalance: <b>${user.balance} ${COIN}</b>`,
-      );
+      await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+      await showPromoteMenu(supabase, chatId);
       return;
     case "🧾 Checks": {
       const { data: tx } = await supabase
