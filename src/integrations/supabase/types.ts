@@ -14,7 +14,143 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cg_ads: {
+        Row: {
+          budget_left: number
+          created_at: string
+          id: string
+          is_active: boolean
+          link: string
+          owner_tg: number
+          reward: number
+          title: string
+        }
+        Insert: {
+          budget_left?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          link: string
+          owner_tg: number
+          reward?: number
+          title: string
+        }
+        Update: {
+          budget_left?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          link?: string
+          owner_tg?: number
+          reward?: number
+          title?: string
+        }
+        Relationships: []
+      }
+      cg_completions: {
+        Row: {
+          ad_id: string
+          created_at: string
+          id: string
+          tg_id: number
+        }
+        Insert: {
+          ad_id: string
+          created_at?: string
+          id?: string
+          tg_id: number
+        }
+        Update: {
+          ad_id?: string
+          created_at?: string
+          id?: string
+          tg_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cg_completions_ad_id_fkey"
+            columns: ["ad_id"]
+            isOneToOne: false
+            referencedRelation: "cg_ads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cg_telegram_updates: {
+        Row: {
+          created_at: string
+          update_id: number
+        }
+        Insert: {
+          created_at?: string
+          update_id: number
+        }
+        Update: {
+          created_at?: string
+          update_id?: number
+        }
+        Relationships: []
+      }
+      cg_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          reason: string
+          tg_id: number
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          reason: string
+          tg_id: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          reason?: string
+          tg_id?: number
+        }
+        Relationships: []
+      }
+      cg_users: {
+        Row: {
+          balance: number
+          created_at: string
+          first_name: string | null
+          id: string
+          pending_action: string | null
+          referral_count: number
+          referred_by: number | null
+          tg_id: number
+          username: string | null
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          first_name?: string | null
+          id?: string
+          pending_action?: string | null
+          referral_count?: number
+          referred_by?: number | null
+          tg_id: number
+          username?: string | null
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          first_name?: string | null
+          id?: string
+          pending_action?: string | null
+          referral_count?: number
+          referred_by?: number | null
+          tg_id?: number
+          username?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
