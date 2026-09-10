@@ -132,7 +132,43 @@ async function getUser(supabase: ReturnType<typeof db>, from: any, startPayload?
   return { user: created as unknown as CgUser, isNew: true };
 }
 
-async function showTask(supabase: ReturnType<typeof db>, chatId: number) {
+const CATEGORIES: { key: string; label: string }[] = [
+  { key: "channels", label: "📢 Channels" },
+  { key: "groups", label: "👥 Groups" },
+  { key: "views", label: "👁 Views" },
+  { key: "bots", label: "🤖 Bots" },
+  { key: "reactions", label: "🤍 Reactions" },
+  { key: "boost", label: "⚡️ Boost" },
+];
+
+async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
+  const { data: ads } = await supabase
+    .from("cg_ads")
+    .select("category")
+    .eq("is_active", true);
+  const counts: Record<string, number> = {};
+  for (const a of (ads ?? []) as any[]) {
+    counts[a.category] = (counts[a.category] ?? 0) + 1;
+  }
+
+  const rows: any[] = [];
+  for (let i = 0; i < CATEGORIES.length; i += 2) {
+    rows.push(
+      CATEGORIES.slice(i, i + 2).map((c) => ({
+        text: `${c.label} · ${counts[c.key] ?? 0}`,
+        callback_data: `cat:${c.key}`,
+      })),
+    );
+  }
+  rows.push([{ text: "📝 Rules", callback_data: "rules" }]);
+  rows.push([{ text: "🔙 Back", callback_data: "back" }]);
+
+  await send(chatId, "📝 <b>Choose a task category to earn</b>", {
+    reply_markup: { inline_keyboard: rows },
+  });
+}
+
+async function showTask(supabase: ReturnType<typeof db>, chatId: number, category?: string) {
   const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
   const doneIds = (done ?? []).map((d: any) => d.ad_id);
 
@@ -143,6 +179,7 @@ async function showTask(supabase: ReturnType<typeof db>, chatId: number) {
     .neq("owner_tg", chatId)
     .order("created_at", { ascending: true })
     .limit(1);
+  if (category) query = query.eq("category", category);
   if (doneIds.length) query = query.not("id", "in", `(${doneIds.join(",")})`);
 
   const { data: ads } = await query;
