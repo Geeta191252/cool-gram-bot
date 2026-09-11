@@ -1702,6 +1702,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       .from("cg_ads")
       .update({ budget_left: (ad as any).budget_left - reward })
       .eq("id", adId);
+    await notifyIfCampaignFinished(supabase, adId);
     await supabase
       .from("cg_transactions")
       .insert({ tg_id: chatId, amount: reward, reason: `Task: ${(ad as any).title}` });
