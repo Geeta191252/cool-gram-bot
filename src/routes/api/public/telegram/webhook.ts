@@ -686,7 +686,7 @@ async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: numb
     })
     .eq("tg_id", chatId);
 
-  await showAudienceMenu(chatId, "no restrictions", 25, "back:fwd");
+  await showAudienceMenu(chatId, "no restrictions", 100, "back:fwd");
 }
 
 
@@ -713,10 +713,10 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
     })
     .eq("tg_id", chatId);
 
-  await showAudienceMenu(chatId, "no restrictions", 25, `back:chatpick:${category}`);
+  await showAudienceMenu(chatId, "no restrictions", 100, `back:chatpick:${category}`);
 }
 
-async function showAudienceMenu(chatId: number, current: string, extra = 25, backTo = "promo_menu") {
+async function showAudienceMenu(chatId: number, current: string, extra = 100, backTo = "promo_menu") {
   await send(
     chatId,
     `🎯 <b>Task audience</b>\nCurrent: ${current}\n\nChoose who can access the task:\n💡 The audience filter adds <b>+${extra} ${COIN}</b> to the min. price per completion.`,
@@ -1300,7 +1300,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     }
     const info = JSON.parse(pending.slice(4));
     const cond = Boolean(info.conditions);
-    const extra = info.category === "bots" ? (cond ? 300 : 100) : 25;
+    const extra = info.category === "bots" ? (cond ? 300 : 100) : 100;
     const langs: string[] = Array.isArray(info.langs) ? info.langs : [];
     if (data === "aud_pick") {
       await showLanguageMenu(chatId, extra, langs);
@@ -1373,7 +1373,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
         .update({ pending_action: `aud:${JSON.stringify(info)}` })
         .eq("tg_id", chatId);
     }
-    await showAudienceMenu(chatId, "no restrictions", info?.category === "bots" ? (cond ? 300 : 100) : 25, backTo);
+    await showAudienceMenu(chatId, "no restrictions", info?.category === "bots" ? (cond ? 300 : 100) : 100, backTo);
 
     return;
   }
