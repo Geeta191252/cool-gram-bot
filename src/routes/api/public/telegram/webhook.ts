@@ -704,9 +704,13 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
     ? `https://t.me/${shared.username}`
     : `https://t.me/c/${String(shared.chat_id).replace("-100", "")}`;
 
+  const baseMin = category === "groups" ? 600 : 750;
+
   await supabase
     .from("cg_users")
-    .update({ pending_action: `aud:${JSON.stringify({ category, title, link })}` })
+    .update({
+      pending_action: `aud:${JSON.stringify({ category, title, link, base_min_price: baseMin, min_price: baseMin })}`,
+    })
     .eq("tg_id", chatId);
 
   await showAudienceMenu(chatId, "no restrictions", 25, `back:chatpick:${category}`);
