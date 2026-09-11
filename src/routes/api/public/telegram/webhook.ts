@@ -273,6 +273,14 @@ function listHeader(category?: string) {
     return "⚠️ Don't stop or delete the bots earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
   if (category === "reactions")
     return "⚠️ Don't remove your reaction earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
+  if (category === "boost")
+    return (
+      "⚡️ <b>Premium boost tasks</b>\n\n" +
+      "Only Telegram Premium users can boost a channel or group.\n" +
+      "Press <b>Boost</b>, confirm the boost in Telegram, then press <b>Check</b>.\n\n" +
+      "⚠️ Don't remove your boost earlier than 7 days, otherwise the GRAM earned will be revoked."
+    );
+
   return "⚠️ Don't leave channels earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
 }
 
@@ -330,16 +338,31 @@ async function showBotSubcategories(supabase: ReturnType<typeof db>, chatId: num
   });
 }
 
+function boostUrl(link: string) {
+  const base = String(link ?? "").split("?")[0];
+  return `${base}?boost`;
+}
+
 async function showTask(
   supabase: ReturnType<typeof db>,
   chatId: number,
   category?: string,
   page = 0,
   subtype?: string,
+  isPremium?: boolean,
 ) {
+  if (category === "boost" && isPremium === false) {
+    await send(
+      chatId,
+      "⚡️ <b>Premium boost tasks</b>\n\nOnly users with <b>Telegram Premium</b> can complete boost tasks.\nGet Telegram Premium and come back to earn from these tasks.",
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
+    );
+    return;
+  }
   const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
   const doneIds = (done ?? []).map((d: any) => d.ad_id);
   const backCb = category === "bots" ? "cat:bots" : "earn";
+
 
   let query = supabase
     .from("cg_ads")
@@ -383,9 +406,13 @@ async function showTask(
           },
         ]
       : [
-          { text: `💲 +${ad.reward.toLocaleString("en-US")} | ${verb}`, url: ad.link },
+          {
+            text: `💲 +${ad.reward.toLocaleString("en-US")} | ${verb}`,
+            url: category === "boost" ? boostUrl(ad.link) : ad.link,
+          },
           { text: "🔄 Check", callback_data: `done:${ad.id}` },
         ],
+
   );
 
   rows.push([
@@ -1529,7 +1556,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const [, catRaw, pg] = data.split(":");
     const [cat, sub] = (catRaw || "").split("|");
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    await showTask(supabase, chatId, cat || undefined, Number(pg) || 0, sub || undefined);
+    await showTask(supabase, chatId, cat || undefined, Number(pg) || 0, sub || undefined, Boolean(cb.from?.is_premium));
     return;
   }
 
@@ -1547,7 +1574,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await showBotSubcategories(supabase, chatId);
       return;
     }
-    await showTask(supabase, chatId, category);
+    await showTask(supabase, chatId, category, 0, undefined, Boolean(cb.from?.is_premium));
     return;
   }
 
@@ -1655,7 +1682,37 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     }
 
     const cat = (ad as any).category as string;
-    if (cat === "channels" || cat === "groups" || cat === "boost") {
+    if (cat === "boost") {
+      if (!cb.from?.is_premium) {
+        await tg("answerCallbackQuery", {
+          callback_query_id: cb.id,
+          text: "❌ Only Telegram Premium users can complete boost tasks.",
+          show_alert: true,
+        });
+        return;
+      }
+      const ref = chatRefFromAd(ad);
+      if (!ref) {
+        await tg("answerCallbackQuery", {
+          callback_query_id: cb.id,
+          text: "Verification not possible for this task yet.",
+          show_alert: true,
+        });
+        return;
+      }
+      const res: any = await tg("getUserChatBoosts", { chat_id: ref, user_id: chatId });
+      const boosts = res?.result?.boosts ?? [];
+      if (!res?.ok || !Array.isArray(boosts) || boosts.length === 0) {
+        await tg("answerCallbackQuery", {
+          callback_query_id: cb.id,
+          text: res?.ok
+            ? "❌ You have not boosted this chat yet. Press Boost first, then Check."
+            : "❌ Could not verify your boost. Boost the chat and try again.",
+          show_alert: true,
+        });
+        return;
+      }
+    } else if (cat === "channels" || cat === "groups") {
       const ref = chatRefFromAd(ad);
       if (!ref) {
         await tg("answerCallbackQuery", {
@@ -1679,6 +1736,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
         return;
       }
     }
+
 
 
     const { error } = await supabase.from("cg_completions").insert({ ad_id: adId, tg_id: chatId });
@@ -1709,7 +1767,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
 
     await tg("answerCallbackQuery", { callback_query_id: cb.id, text: `+${reward} ${COIN} 🎉` });
     await send(chatId, `✅ Task complete! <b>+${reward} ${COIN}</b> credited.`);
-    await showTask(supabase, chatId, (ad as any).category);
+    await showTask(supabase, chatId, (ad as any).category, 0, undefined, Boolean(cb.from?.is_premium));
   }
 }
 
