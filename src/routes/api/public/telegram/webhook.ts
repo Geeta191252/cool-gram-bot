@@ -1556,7 +1556,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const [, catRaw, pg] = data.split(":");
     const [cat, sub] = (catRaw || "").split("|");
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    await showTask(supabase, chatId, cat || undefined, Number(pg) || 0, sub || undefined);
+    await showTask(supabase, chatId, cat || undefined, Number(pg) || 0, sub || undefined, Boolean(cb.from?.is_premium));
     return;
   }
 
@@ -1574,7 +1574,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await showBotSubcategories(supabase, chatId);
       return;
     }
-    await showTask(supabase, chatId, category);
+    await showTask(supabase, chatId, category, 0, undefined, Boolean(cb.from?.is_premium));
     return;
   }
 
@@ -1736,7 +1736,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
 
     await tg("answerCallbackQuery", { callback_query_id: cb.id, text: `+${reward} ${COIN} 🎉` });
     await send(chatId, `✅ Task complete! <b>+${reward} ${COIN}</b> credited.`);
-    await showTask(supabase, chatId, (ad as any).category);
+    await showTask(supabase, chatId, (ad as any).category, 0, undefined, Boolean(cb.from?.is_premium));
   }
 }
 
