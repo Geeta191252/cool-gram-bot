@@ -338,16 +338,31 @@ async function showBotSubcategories(supabase: ReturnType<typeof db>, chatId: num
   });
 }
 
+function boostUrl(link: string) {
+  const base = String(link ?? "").split("?")[0];
+  return `${base}?boost`;
+}
+
 async function showTask(
   supabase: ReturnType<typeof db>,
   chatId: number,
   category?: string,
   page = 0,
   subtype?: string,
+  isPremium?: boolean,
 ) {
+  if (category === "boost" && isPremium === false) {
+    await send(
+      chatId,
+      "⚡️ <b>Premium boost tasks</b>\n\nOnly users with <b>Telegram Premium</b> can complete boost tasks.\nGet Telegram Premium and come back to earn from these tasks.",
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
+    );
+    return;
+  }
   const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
   const doneIds = (done ?? []).map((d: any) => d.ad_id);
   const backCb = category === "bots" ? "cat:bots" : "earn";
+
 
   let query = supabase
     .from("cg_ads")
