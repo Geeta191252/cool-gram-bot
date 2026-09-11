@@ -1682,7 +1682,37 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     }
 
     const cat = (ad as any).category as string;
-    if (cat === "channels" || cat === "groups" || cat === "boost") {
+    if (cat === "boost") {
+      if (!cb.from?.is_premium) {
+        await tg("answerCallbackQuery", {
+          callback_query_id: cb.id,
+          text: "❌ Only Telegram Premium users can complete boost tasks.",
+          show_alert: true,
+        });
+        return;
+      }
+      const ref = chatRefFromAd(ad);
+      if (!ref) {
+        await tg("answerCallbackQuery", {
+          callback_query_id: cb.id,
+          text: "Verification not possible for this task yet.",
+          show_alert: true,
+        });
+        return;
+      }
+      const res: any = await tg("getUserChatBoosts", { chat_id: ref, user_id: chatId });
+      const boosts = res?.result?.boosts ?? [];
+      if (!res?.ok || !Array.isArray(boosts) || boosts.length === 0) {
+        await tg("answerCallbackQuery", {
+          callback_query_id: cb.id,
+          text: res?.ok
+            ? "❌ You have not boosted this chat yet. Press Boost first, then Check."
+            : "❌ Could not verify your boost. Boost the chat and try again.",
+          show_alert: true,
+        });
+        return;
+      }
+    } else if (cat === "channels" || cat === "groups") {
       const ref = chatRefFromAd(ad);
       if (!ref) {
         await tg("answerCallbackQuery", {
@@ -1706,6 +1736,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
         return;
       }
     }
+
 
 
     const { error } = await supabase.from("cg_completions").insert({ ad_id: adId, tg_id: chatId });
