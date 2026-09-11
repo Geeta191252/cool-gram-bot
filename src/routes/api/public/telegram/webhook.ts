@@ -52,6 +52,17 @@ function parsePostLink(link: string | null): { chat: string | number; msg: numbe
   return null;
 }
 
+function chatRefFromAd(ad: any): string | number | null {
+  if (ad?.src_chat) return Number(ad.src_chat);
+  const link: string = ad?.link ?? "";
+  const priv = link.match(/t\.me\/c\/(\d+)/);
+  if (priv) return Number(`-100${priv[1]}`);
+  const pub = link.match(/t\.me\/([A-Za-z0-9_]{4,})/);
+  if (pub) return `@${pub[1]}`;
+  return null;
+}
+
+
 async function tg(method: string, payload: unknown) {
   const p = payload as Record<string, any>;
   if (
