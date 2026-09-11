@@ -1612,7 +1612,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const adId = data.slice(5);
     const { data: ad } = await supabase
       .from("cg_ads")
-      .select("id, title, reward, budget_left, is_active, category")
+      .select("id, title, reward, budget_left, is_active, category, link, src_chat")
       .eq("id", adId)
       .maybeSingle();
 
@@ -1620,6 +1620,33 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Ye task ab available nahi hai." });
       return;
     }
+
+    const cat = (ad as any).category as string;
+    if (cat === "channels" || cat === "groups" || cat === "boost") {
+      const ref = chatRefFromAd(ad);
+      if (!ref) {
+        await tg("answerCallbackQuery", {
+          callback_query_id: cb.id,
+          text: "Verification not possible for this task yet.",
+          show_alert: true,
+        });
+        return;
+      }
+      const res: any = await tg("getChatMember", { chat_id: ref, user_id: chatId });
+      const status = res?.result?.status;
+      const joined = ["member", "administrator", "creator", "restricted"].includes(status);
+      if (!joined) {
+        await tg("answerCallbackQuery", {
+          callback_query_id: cb.id,
+          text: res?.ok
+            ? "❌ You have not joined yet. Join first, then press Check."
+            : "❌ Could not verify. Join the chat and try again.",
+          show_alert: true,
+        });
+        return;
+      }
+    }
+
 
     const { error } = await supabase.from("cg_completions").insert({ ad_id: adId, tg_id: chatId });
     if (error) {
