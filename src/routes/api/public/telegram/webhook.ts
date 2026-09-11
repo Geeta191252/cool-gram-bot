@@ -273,6 +273,14 @@ function listHeader(category?: string) {
     return "⚠️ Don't stop or delete the bots earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
   if (category === "reactions")
     return "⚠️ Don't remove your reaction earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
+  if (category === "boost")
+    return (
+      "⚡️ <b>Premium boost tasks</b>\n\n" +
+      "Only Telegram Premium users can boost a channel or group.\n" +
+      "Press <b>Boost</b>, confirm the boost in Telegram, then press <b>Check</b>.\n\n" +
+      "⚠️ Don't remove your boost earlier than 7 days, otherwise the GRAM earned will be revoked."
+    );
+
   return "⚠️ Don't leave channels earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
 }
 
