@@ -111,6 +111,38 @@ async function send(chatId: number, text: string, extra: Record<string, unknown>
   });
 }
 
+// Campaign khatam hone par owner ko notify karein
+async function notifyIfCampaignFinished(supabase: ReturnType<typeof db>, adId: string) {
+  const { data: ad } = await supabase
+    .from("cg_ads")
+    .select("id, owner_tg, title, reward, budget_left, is_active, category")
+    .eq("id", adId)
+    .maybeSingle();
+  const a = ad as any;
+  if (!a || !a.is_active) return;
+  if (a.budget_left >= a.reward) return;
+
+  await supabase.from("cg_ads").update({ is_active: false }).eq("id", adId);
+
+  const { count } = await supabase
+    .from("cg_completions")
+    .select("id", { count: "exact", head: true })
+    .eq("ad_id", adId);
+
+  await tgRaw("sendMessage", {
+    chat_id: a.owner_tg,
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    text:
+      `✅ <b>Your promotion is complete!</b>\n\n` +
+      `📢 <b>${a.title}</b>\n` +
+      `👥 Completed by: <b>${count ?? 0}</b> users\n` +
+      `💰 Reward per user: <b>${a.reward} ${COIN}</b>\n\n` +
+      `The full order has been delivered. Create a new task from 📢 Promote.`,
+  });
+}
+
+
 let cachedBotName: string | null = null;
 async function botUsername() {
   if (cachedBotName) return cachedBotName;
@@ -1547,6 +1579,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       .update({ balance: ((u as any)?.balance ?? 0) + a.reward })
       .eq("tg_id", chatId);
     await supabase.from("cg_ads").update({ budget_left: a.budget_left - a.reward }).eq("id", adId);
+    await notifyIfCampaignFinished(supabase, adId);
     await supabase
       .from("cg_transactions")
       .insert({ tg_id: chatId, amount: a.reward, reason: `Task: ${a.title}` });
@@ -1669,6 +1702,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       .from("cg_ads")
       .update({ budget_left: (ad as any).budget_left - reward })
       .eq("id", adId);
+    await notifyIfCampaignFinished(supabase, adId);
     await supabase
       .from("cg_transactions")
       .insert({ tg_id: chatId, amount: reward, reason: `Task: ${(ad as any).title}` });
