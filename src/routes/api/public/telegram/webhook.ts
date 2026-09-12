@@ -1065,6 +1065,248 @@ async function askAmount(supabase: ReturnType<typeof db>, chatId: number, info: 
 }
 
 
+// ---------------- Telegram Stars deposit ----------------
+const STAR_PACKS = [50, 100, 250, 500, 1000];
+
+async function showDepositMenu(supabase: ReturnType<typeof db>, chatId: number) {
+  await supabase.from("cg_users").update({ pending_action: "stars" }).eq("tg_id", chatId);
+  const rate = cfg("star_rate");
+  const rows = [];
+  for (let i = 0; i < STAR_PACKS.length; i += 2) {
+    rows.push(
+      STAR_PACKS.slice(i, i + 2).map((s) => ({
+        text: `⭐ ${s} → ${(s * rate).toLocaleString("en-US")} ${COIN}`,
+        callback_data: `dep:${s}`,
+      })),
+    );
+  }
+  rows.push([{ text: "🔙 Back", callback_data: "back" }]);
+  await send(
+    chatId,
+    `⭐ <b>Deposit with Telegram Stars</b>\n\n` +
+      `<blockquote>Rate: 1 ⭐ = <b>${rate.toLocaleString("en-US")} ${COIN}</b></blockquote>\n\n` +
+      `Choose a pack or send the number of Stars you want to pay:`,
+    { reply_markup: { inline_keyboard: rows } },
+  );
+}
+
+async function sendStarsInvoice(chatId: number, stars: number) {
+  const credit = stars * cfg("star_rate");
+  const res = await tgRaw("sendInvoice", {
+    chat_id: chatId,
+    title: "COOL GRAM balance top-up",
+    description: `${stars} Telegram Stars → ${credit.toLocaleString("en-US")} ${COIN}`,
+    payload: `dep:${chatId}:${stars}`,
+    currency: "XTR",
+    prices: [{ label: `${stars} Stars`, amount: stars }],
+  });
+  if (!res?.ok) {
+    await send(chatId, "❌ Could not create the Stars invoice. Please try again in a moment.");
+  }
+}
+
+async function handleSuccessfulPayment(supabase: ReturnType<typeof db>, chatId: number, from: any, sp: any) {
+  const stars = Number(sp.total_amount ?? 0);
+  if (!stars) return;
+  const credit = stars * cfg("star_rate");
+  const username = from?.username ? `@${from.username}` : (from?.first_name ?? String(chatId));
+
+  const { data: u } = await supabase
+    .from("cg_users")
+    .select("balance")
+    .eq("tg_id", chatId)
+    .maybeSingle();
+  const balance = Number((u as any)?.balance ?? 0) + credit;
+
+  await supabase
+    .from("cg_users")
+    .update({ balance, pending_action: null })
+    .eq("tg_id", chatId);
+  await supabase
+    .from("cg_transactions")
+    .insert({ tg_id: chatId, amount: credit, reason: `Deposit: ${stars} Telegram Stars` });
+  await supabase.from("cg_star_payments").insert({
+    tg_id: chatId,
+    username: from?.username ?? null,
+    stars,
+    credited: credit,
+    charge_id: sp.telegram_payment_charge_id ?? null,
+  });
+
+  await send(
+    chatId,
+    `✅ <b>Payment received!</b>\n\n⭐ Stars paid: <b>${stars}</b>\n💰 Credited: <b>+${credit.toLocaleString("en-US")} ${COIN}</b>\n💳 New balance: <b>${balance.toLocaleString("en-US")} ${COIN}</b>`,
+  );
+
+  await tgRaw("sendMessage", {
+    chat_id: OWNER_TG,
+    parse_mode: "HTML",
+    text:
+      `⭐ <b>New Stars deposit</b>\n\n` +
+      `From: ${username} (<code>${chatId}</code>)\n` +
+      `Stars: <b>${stars}</b>\n` +
+      `Credited: <b>${credit.toLocaleString("en-US")} ${COIN}</b>\n\n` +
+      `Owner account: @${OWNER_USERNAME}`,
+  });
+}
+
+// ---------------- Admin panel ----------------
+function isOwner(chatId: number) {
+  return chatId === OWNER_TG;
+}
+
+async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
+  const users = await supabase.from("cg_users").select("id", { count: "exact", head: true });
+  const ads = await supabase
+    .from("cg_ads")
+    .select("id", { count: "exact", head: true })
+    .eq("is_active", true);
+  const { data: stars } = await supabase.from("cg_star_payments").select("stars");
+  const totalStars = ((stars ?? []) as any[]).reduce((a, r) => a + Number(r.stars), 0);
+
+  const lines = Object.entries(SETTINGS).map(
+    ([key, def]) => `<code>${key}</code> — ${def.label}: <b>${cfg(key).toLocaleString("en-US")}</b>`,
+  );
+
+  await send(
+    chatId,
+    `🛠 <b>Admin panel</b>\n\n` +
+      `👥 Users: <b>${users.count ?? 0}</b>\n📢 Active campaigns: <b>${ads.count ?? 0}</b>\n⭐ Stars received: <b>${totalStars}</b>\n\n` +
+      `<b>Current prices &amp; settings</b>\n${lines.join("\n")}\n\n` +
+      `<b>Commands</b>\n` +
+      `<code>/setprice &lt;key&gt; &lt;value&gt;</code> — change any setting\n` +
+      `<code>/resetprice &lt;key&gt;</code> — back to default\n` +
+      `<code>/addbalance &lt;tg_id&gt; &lt;amount&gt;</code> — add ${COIN} to a user\n` +
+      `<code>/takebalance &lt;tg_id&gt; &lt;amount&gt;</code> — remove ${COIN}\n` +
+      `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
+      `<code>/deposits</code> — last Stars deposits`,
+  );
+}
+
+async function handleAdminCommand(
+  supabase: ReturnType<typeof db>,
+  chatId: number,
+  text: string,
+): Promise<boolean> {
+  if (!isOwner(chatId)) return false;
+  const [cmdRaw, ...args] = text.split(/\s+/);
+  const cmd = (cmdRaw ?? "").split("@")[0];
+
+  if (cmd === "/admin") {
+    await showAdminPanel(supabase, chatId);
+    return true;
+  }
+
+  if (cmd === "/setprice") {
+    const key = args[0] ?? "";
+    const value = Number(args[1]);
+    if (!SETTINGS[key] || !Number.isFinite(value) || value < 0) {
+      await send(
+        chatId,
+        `⚠️ Use: <code>/setprice &lt;key&gt; &lt;value&gt;</code>\nKeys: ${Object.keys(SETTINGS)
+          .map((k) => `<code>${k}</code>`)
+          .join(", ")}`,
+      );
+      return true;
+    }
+    await supabase.from("cg_settings").upsert({ key, value, updated_at: new Date().toISOString() });
+    settingsMap[key] = value;
+    await send(
+      chatId,
+      `✅ <b>${SETTINGS[key]!.label}</b> updated to <b>${value.toLocaleString("en-US")}</b>.`,
+    );
+    return true;
+  }
+
+  if (cmd === "/resetprice") {
+    const key = args[0] ?? "";
+    if (!SETTINGS[key]) {
+      await send(chatId, "⚠️ Unknown key. Open /admin to see all keys.");
+      return true;
+    }
+    await supabase.from("cg_settings").delete().eq("key", key);
+    delete settingsMap[key];
+    await send(chatId, `♻️ <b>${SETTINGS[key]!.label}</b> reset to default <b>${SETTINGS[key]!.def}</b>.`);
+    return true;
+  }
+
+  if (cmd === "/addbalance" || cmd === "/takebalance") {
+    const target = Number(args[0]);
+    const amountRaw = Number(args[1]);
+    if (!Number.isFinite(target) || !Number.isFinite(amountRaw) || amountRaw <= 0) {
+      await send(chatId, `⚠️ Use: <code>${cmd} &lt;tg_id&gt; &lt;amount&gt;</code>`);
+      return true;
+    }
+    const amount = cmd === "/addbalance" ? Math.floor(amountRaw) : -Math.floor(amountRaw);
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", target)
+      .maybeSingle();
+    if (!u) {
+      await send(chatId, "❌ This user has not started the bot yet.");
+      return true;
+    }
+    const balance = Math.max(0, Number((u as any).balance) + amount);
+    await supabase.from("cg_users").update({ balance }).eq("tg_id", target);
+    await supabase
+      .from("cg_transactions")
+      .insert({ tg_id: target, amount, reason: amount > 0 ? "Admin top-up" : "Admin adjustment" });
+    await send(
+      chatId,
+      `✅ User <code>${target}</code> balance is now <b>${balance.toLocaleString("en-US")} ${COIN}</b>.`,
+    );
+    await tgRaw("sendMessage", {
+      chat_id: target,
+      parse_mode: "HTML",
+      text:
+        amount > 0
+          ? `💰 <b>+${amount.toLocaleString("en-US")} ${COIN}</b> added to your balance by the admin.\nNew balance: <b>${balance.toLocaleString("en-US")} ${COIN}</b>`
+          : `ℹ️ Your balance was adjusted by the admin.\nNew balance: <b>${balance.toLocaleString("en-US")} ${COIN}</b>`,
+    });
+    return true;
+  }
+
+  if (cmd === "/userinfo") {
+    const target = Number(args[0]);
+    if (!Number.isFinite(target)) {
+      await send(chatId, "⚠️ Use: <code>/userinfo &lt;tg_id&gt;</code>");
+      return true;
+    }
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("tg_id, username, first_name, balance, referral_count, created_at")
+      .eq("tg_id", target)
+      .maybeSingle();
+    if (!u) {
+      await send(chatId, "❌ User not found.");
+      return true;
+    }
+    const x = u as any;
+    await send(
+      chatId,
+      `👤 <b>${x.first_name ?? "User"}</b> ${x.username ? `@${x.username}` : ""}\nID: <code>${x.tg_id}</code>\nBalance: <b>${Number(x.balance).toLocaleString("en-US")} ${COIN}</b>\nReferrals: <b>${x.referral_count}</b>\nJoined: ${new Date(x.created_at).toDateString()}`,
+    );
+    return true;
+  }
+
+  if (cmd === "/deposits") {
+    const { data } = await supabase
+      .from("cg_star_payments")
+      .select("tg_id, username, stars, credited, created_at")
+      .order("created_at", { ascending: false })
+      .limit(15);
+    const rows = ((data ?? []) as any[]).map(
+      (r) =>
+        `⭐ ${r.stars} → ${Number(r.credited).toLocaleString("en-US")} ${COIN} — ${r.username ? `@${r.username}` : r.tg_id}`,
+    );
+    await send(chatId, `⭐ <b>Last Stars deposits</b>\n\n${rows.length ? rows.join("\n") : "No deposits yet."}`);
+    return true;
+  }
+
+  return false;
+}
+
 async function handleText(supabase: ReturnType<typeof db>, chatId: number, from: any, text: string) {
   const startPayload = text.startsWith("/start") ? text.split(" ")[1] : undefined;
   const { user, isNew } = await getUser(supabase, from, startPayload);
