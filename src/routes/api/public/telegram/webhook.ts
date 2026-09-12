@@ -994,7 +994,7 @@ async function askCount(
   rows.push([{ text: "⬅️ Back", callback_data: isBoost ? "back:boostdur" : "aud_back" }]);
   await send(
     chatId,
-    `ℹ️ <b>Task creation commission — 15%.</b>\n\n` +
+    `ℹ️ <b>Task creation commission — ${cfg("commission_pct")}%.</b>\n\n` +
       `<blockquote>💲 ${isBoost ? "Telegram Boost price" : info.category === "bots" ? "Bot launch price" : "Task price"} — ${price.toLocaleString("en-US")} ${COIN}\n` +
       `💰 Your balance — ${balance.toLocaleString("en-US")} ${COIN}</blockquote>\n\n` +
       `📝 <b>Enter the number of ${isBoost ? "Telegram Boost" : "completions"} or choose:</b>`,
@@ -1045,7 +1045,7 @@ async function createCampaign(
     .insert({ tg_id: chatId, amount: -total, reason: `Promotion: ${info.title ?? info.category}` });
   await send(
     chatId,
-    `🚀 <b>Campaign live hai!</b>\n\n${info.title ?? ""}\nPrice: ${reward.toLocaleString("en-US")} ${COIN} × ${count}\nTotal (incl. 15%): ${total.toLocaleString("en-US")} ${COIN}\nAudience: ${info.audience ?? "no restrictions"}`,
+    `🚀 <b>Your campaign is live!</b>\n\n${info.title ?? ""}\nPrice: ${reward.toLocaleString("en-US")} ${COIN} × ${count}\nTotal (incl. ${cfg("commission_pct")}%): ${total.toLocaleString("en-US")} ${COIN}\nAudience: ${info.audience ?? "no restrictions"}`,
     { reply_markup: MAIN_KEYBOARD },
   );
 }
