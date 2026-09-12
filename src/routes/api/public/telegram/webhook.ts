@@ -1619,6 +1619,19 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
   const data = String(cb.data ?? "");
 
 
+  if (data === "dep_menu") {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await showDepositMenu(supabase, chatId);
+    return;
+  }
+
+  if (data.startsWith("dep:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+    await sendStarsInvoice(chatId, Number(data.slice(4)));
+    return;
+  }
+
   if (data === "earn" || data === "back") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     if (data === "back") {
