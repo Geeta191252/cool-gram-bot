@@ -1312,6 +1312,24 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
   const { user, isNew } = await getUser(supabase, from, startPayload);
   const bot = await botUsername();
 
+  if (text.startsWith("/") && (await handleAdminCommand(supabase, chatId, text))) return;
+
+  if (text.startsWith("/deposit")) {
+    await showDepositMenu(supabase, chatId);
+    return;
+  }
+
+  if (user?.pending_action === "stars" && /^\d+$/.test(text.trim())) {
+    const stars = Number(text.trim());
+    if (stars < 1 || stars > 100000) {
+      await send(chatId, "⚠️ Enter a number of Stars between 1 and 100000.");
+      return;
+    }
+    await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+    await sendStarsInvoice(chatId, stars);
+    return;
+  }
+
   const isMenu = MAIN_KEYBOARD.keyboard.flat().some((b) => b.text === text);
   if (isMenu && user?.pending_action) {
     await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
