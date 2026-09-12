@@ -88,6 +88,54 @@ export type Database = {
           },
         ]
       }
+      cg_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      cg_star_payments: {
+        Row: {
+          charge_id: string | null
+          created_at: string
+          credited: number
+          id: string
+          stars: number
+          tg_id: number
+          username: string | null
+        }
+        Insert: {
+          charge_id?: string | null
+          created_at?: string
+          credited: number
+          id?: string
+          stars: number
+          tg_id: number
+          username?: string | null
+        }
+        Update: {
+          charge_id?: string | null
+          created_at?: string
+          credited?: number
+          id?: string
+          stars?: number
+          tg_id?: number
+          username?: string | null
+        }
+        Relationships: []
+      }
       cg_telegram_updates: {
         Row: {
           created_at: string
