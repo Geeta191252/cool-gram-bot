@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789239814658,
+      "tag": "0000_create_cg_settings_and_star_payments",
+      "breakpoints": true
+    }
+  ]
+}
