@@ -550,10 +550,6 @@ async function askChatPicker(
   });
 }
 
-const BOOST_PLANS: { key: string; days: number; price: number }[] = [
-  { key: "7", days: 7, price: 21000 },
-  { key: "30", days: 30, price: 90000 },
-];
 
 async function showBoostTypeMenu(supabase: ReturnType<typeof db>, chatId: number) {
   await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
@@ -580,7 +576,7 @@ async function showBoostDuration(supabase: ReturnType<typeof db>, chatId: number
   await send(chatId, "🕐 <b>Choose the Telegram Boost duration.</b>", {
     reply_markup: {
       inline_keyboard: [
-        ...BOOST_PLANS.map((p) => [
+        ...boostPlans().map((p) => [
           {
             text: `⚡️ ${p.days} days - ${p.price.toLocaleString("en-US")} ${COIN}`,
             callback_data: `boostdur:${p.key}`,
@@ -749,8 +745,8 @@ async function askBotConditions(supabase: ReturnType<typeof db>, chatId: number,
 async function showBotAudience(supabase: ReturnType<typeof db>, chatId: number, info: any) {
   await setPending(supabase, chatId, "botaud", info);
   const cond = Boolean(info.conditions);
-  const priceAll = cond ? "3,000" : "900";
-  const pricePrem = cond ? "4,000" : "1,400";
+  const priceAll = (cond ? cfg("bot_cond_all") : cfg("bot_all")).toLocaleString("en-US");
+  const pricePrem = (cond ? cfg("bot_cond_prem") : cfg("bot_prem")).toLocaleString("en-US");
   await tg("sendMessage", {
     chat_id: chatId,
     text:
@@ -836,11 +832,11 @@ async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: numb
   await supabase
     .from("cg_users")
     .update({
-      pending_action: `aud:${JSON.stringify({ category: "views", title, link, base_min_price: 25, src_chat: originChat.id, src_msg: msgId })}`,
+      pending_action: `aud:${JSON.stringify({ category: "views", title, link, base_min_price: cfg("min_views"), min_price: cfg("min_views"), src_chat: originChat.id, src_msg: msgId })}`,
     })
     .eq("tg_id", chatId);
 
-  await showAudienceMenu(chatId, "no restrictions", 100, "back:fwd");
+  await showAudienceMenu(chatId, "no restrictions", cfg("aud_surcharge"), "back:fwd");
 }
 
 
@@ -877,7 +873,7 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
     return;
   }
 
-  const baseMin = category === "groups" ? 600 : 750;
+  const baseMin = category === "groups" ? cfg("min_group") : cfg("min_channel");
 
   await supabase
     .from("cg_users")
@@ -886,10 +882,10 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
     })
     .eq("tg_id", chatId);
 
-  await showAudienceMenu(chatId, "no restrictions", 100, `back:chatpick:${category}`);
+  await showAudienceMenu(chatId, "no restrictions", cfg("aud_surcharge"), `back:chatpick:${category}`);
 }
 
-async function showAudienceMenu(chatId: number, current: string, extra = 100, backTo = "promo_menu") {
+async function showAudienceMenu(chatId: number, current: string, extra = cfg("aud_surcharge"), backTo = "promo_menu") {
   await send(
     chatId,
     `🎯 <b>Task audience</b>\nCurrent: ${current}\n\nChoose who can access the task:\n💡 The audience filter adds <b>+${extra} ${COIN}</b> to the min. price per completion.`,
@@ -970,10 +966,12 @@ async function askPrice(supabase: ReturnType<typeof db>, chatId: number, info: a
   );
 }
 
-const COMMISSION = 0.15;
+function commission() {
+  return cfg("commission_pct") / 100;
+}
 
 function unitCost(price: number) {
-  return Math.ceil(price * (1 + COMMISSION));
+  return Math.ceil(price * (1 + commission()));
 }
 
 async function askCount(
@@ -1423,7 +1421,8 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await showBoostTypeMenu(supabase, chatId);
       return;
     }
-    const plan = BOOST_PLANS.find((p) => p.key === data.split(":")[1]) ?? BOOST_PLANS[0]!;
+    const plans = boostPlans();
+    const plan = plans.find((p) => p.key === data.split(":")[1]) ?? plans[0]!;
     info.days = plan.days;
     info.reward = plan.price;
     info.audience = "no restrictions";
@@ -1482,13 +1481,19 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const isPremium = data.split(":")[1] === "premium";
     const cond = Boolean(info.conditions);
     info.audience = isPremium ? "Telegram Premium only" : "All users";
-    info.base_min_price = cond ? (isPremium ? 4000 : 3000) : isPremium ? 1400 : 900;
+    info.base_min_price = cond
+      ? isPremium
+        ? cfg("bot_cond_prem")
+        : cfg("bot_cond_all")
+      : isPremium
+        ? cfg("bot_prem")
+        : cfg("bot_all");
     info.min_price = info.base_min_price;
     await supabase
       .from("cg_users")
       .update({ pending_action: `aud:${JSON.stringify(info)}` })
       .eq("tg_id", chatId);
-    await showAudienceMenu(chatId, "no restrictions", cond ? 300 : 100, "back:botaud");
+    await showAudienceMenu(chatId, "no restrictions", cond ? cfg("bot_cond_surcharge") : cfg("aud_surcharge"), "back:botaud");
 
     return;
   }
@@ -1507,7 +1512,8 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     }
     const info = JSON.parse(pending.slice(4));
     const cond = Boolean(info.conditions);
-    const extra = info.category === "bots" ? (cond ? 300 : 100) : 100;
+    const extra =
+      info.category === "bots" && cond ? cfg("bot_cond_surcharge") : cfg("aud_surcharge");
     const langs: string[] = Array.isArray(info.langs) ? info.langs : [];
     if (data === "aud_pick") {
       await showLanguageMenu(chatId, extra, langs);
@@ -1580,7 +1586,12 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
         .update({ pending_action: `aud:${JSON.stringify(info)}` })
         .eq("tg_id", chatId);
     }
-    await showAudienceMenu(chatId, "no restrictions", info?.category === "bots" ? (cond ? 300 : 100) : 100, backTo);
+    await showAudienceMenu(
+      chatId,
+      "no restrictions",
+      info?.category === "bots" && cond ? cfg("bot_cond_surcharge") : cfg("aud_surcharge"),
+      backTo,
+    );
 
     return;
   }
