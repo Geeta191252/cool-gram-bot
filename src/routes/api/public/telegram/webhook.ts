@@ -1367,6 +1367,34 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+  if (data.startsWith("boostpick:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const kind = data.split(":")[1] === "group" ? "group" : "channel";
+    await askChatPicker(supabase, chatId, `boost_${kind}`, kind === "channel");
+    return;
+  }
+
+  if (data.startsWith("boostdur:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const info = await getPendingInfo(supabase, chatId, "boostdur");
+    if (!info) {
+      await showBoostTypeMenu(supabase, chatId);
+      return;
+    }
+    const plan = BOOST_PLANS.find((p) => p.key === data.split(":")[1]) ?? BOOST_PLANS[0];
+    info.days = plan.days;
+    info.reward = plan.price;
+    info.audience = "no restrictions";
+    info.title = `${info.title} — ${plan.days} days boost`;
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", chatId)
+      .maybeSingle();
+    await askCount(supabase, chatId, info, Number((u as any)?.balance ?? 0));
+    return;
+  }
+
   if (data === "bot_pick") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     await askBotLink(supabase, chatId);
