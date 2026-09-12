@@ -931,13 +931,14 @@ async function askCount(
   if (max >= 1) {
     rows.push([{ text: `${max.toLocaleString("en-US")} (Maximum for your balance)`, callback_data: "cnt_max" }]);
   }
-  rows.push([{ text: "⬅️ Back", callback_data: "aud_back" }]);
+  const isBoost = info.category === "boost";
+  rows.push([{ text: "⬅️ Back", callback_data: isBoost ? "back:boostdur" : "aud_back" }]);
   await send(
     chatId,
     `ℹ️ <b>Task creation commission — 15%.</b>\n\n` +
-      `<blockquote>💲 ${info.category === "bots" ? "Bot launch price" : "Task price"} — ${price.toLocaleString("en-US")} ${COIN}\n` +
+      `<blockquote>💲 ${isBoost ? "Telegram Boost price" : info.category === "bots" ? "Bot launch price" : "Task price"} — ${price.toLocaleString("en-US")} ${COIN}\n` +
       `💰 Your balance — ${balance.toLocaleString("en-US")} ${COIN}</blockquote>\n\n` +
-      `📝 <b>Enter the number of completions or choose:</b>`,
+      `📝 <b>Enter the number of ${isBoost ? "Telegram Boost" : "completions"} or choose:</b>`,
     { reply_markup: { inline_keyboard: rows } },
   );
 }
