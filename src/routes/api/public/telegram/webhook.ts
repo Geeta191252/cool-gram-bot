@@ -1385,7 +1385,8 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     info.days = plan.days;
     info.reward = plan.price;
     info.audience = "no restrictions";
-    info.title = `${info.title} — ${plan.days} days boost`;
+    info.base_title = info.base_title ?? info.title;
+    info.title = `${info.base_title} — ${plan.days} days boost`;
     const { data: u } = await supabase
       .from("cg_users")
       .select("balance")
