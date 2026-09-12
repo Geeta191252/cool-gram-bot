@@ -1294,7 +1294,12 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     case "👤 My Cabinet":
       await send(
         chatId,
-        `👤 <b>My Cabinet</b>\n\nID: <code>${chatId}</code>\nBalance: <b>${user.balance} ${COIN}</b>\nReferrals: <b>${user.referral_count}</b>\n\n🔗 Your invite link:\nhttps://t.me/${bot}?start=ref_${chatId}\n\nHar invite pe <b>+${REFERRAL_BONUS} ${COIN}</b>.`,
+        `👤 <b>My Cabinet</b>\n\nID: <code>${chatId}</code>\nBalance: <b>${user.balance} ${COIN}</b>\nReferrals: <b>${user.referral_count}</b>\n\n🔗 Your invite link:\nhttps://t.me/${bot}?start=ref_${chatId}\n\nYou get <b>+${REFERRAL_BONUS} ${COIN}</b> per invite.`,
+        {
+          reply_markup: {
+            inline_keyboard: [[{ text: "⭐ Deposit with Telegram Stars", callback_data: "dep_menu" }]],
+          },
+        },
       );
       return;
     case "✅ Subscription Check": {
