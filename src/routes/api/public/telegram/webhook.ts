@@ -24,6 +24,48 @@ function db() {
   });
 }
 
+// ---------------- Admin + settings ----------------
+const OWNER_TG = 6965488457;
+const OWNER_USERNAME = "Hidden_Xman";
+
+const SETTINGS: Record<string, { def: number; label: string }> = {
+  min_channel: { def: 750, label: "Channel subscriber min price" },
+  min_group: { def: 600, label: "Group join min price" },
+  min_views: { def: 25, label: "Post view min price" },
+  bot_all: { def: 900, label: "Bot start — all users min price" },
+  bot_prem: { def: 1400, label: "Bot start — premium only min price" },
+  bot_cond_all: { def: 3000, label: "Bot + conditions — all users min price" },
+  bot_cond_prem: { def: 4000, label: "Bot + conditions — premium only min price" },
+  boost_7: { def: 21000, label: "Telegram Boost 7 days price" },
+  boost_30: { def: 90000, label: "Telegram Boost 30 days price" },
+  aud_surcharge: { def: 100, label: "Audience filter surcharge" },
+  bot_cond_surcharge: { def: 300, label: "Bot conditions audience surcharge" },
+  commission_pct: { def: 15, label: "Task creation commission (%)" },
+  star_rate: { def: 100, label: `${COIN} credited per 1 Telegram Star` },
+};
+
+let settingsMap: Record<string, number> = {};
+
+async function loadSettings(supabase: ReturnType<typeof db>) {
+  const { data } = await supabase.from("cg_settings").select("key, value");
+  const map: Record<string, number> = {};
+  for (const row of (data ?? []) as any[]) map[row.key] = Number(row.value);
+  settingsMap = map;
+}
+
+function cfg(key: keyof typeof SETTINGS | string) {
+  const stored = settingsMap[key];
+  if (typeof stored === "number" && !Number.isNaN(stored)) return stored;
+  return SETTINGS[key]?.def ?? 0;
+}
+
+function boostPlans(): { key: string; days: number; price: number }[] {
+  return [
+    { key: "7", days: 7, price: cfg("boost_7") },
+    { key: "30", days: 30, price: cfg("boost_30") },
+  ];
+}
+
 // Callback ke dauraan pehla sendMessage usi message ko edit kare (naya page na aaye)
 let editCtx: { chatId: number; messageId: number; used: boolean } | null = null;
 
