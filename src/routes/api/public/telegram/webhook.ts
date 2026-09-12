@@ -1330,7 +1330,11 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await askReactionLink(supabase, chatId);
       return;
     }
-    if (key === "channels" || key === "groups" || key === "boost") {
+    if (key === "boost") {
+      await showBoostTypeMenu(supabase, chatId);
+      return;
+    }
+    if (key === "channels" || key === "groups") {
       await askChatPicker(supabase, chatId, key, key !== "groups");
       return;
     }
