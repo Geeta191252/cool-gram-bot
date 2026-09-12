@@ -1548,6 +1548,22 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     const step = data.slice(5);
 
+    if (step === "boosttype") {
+      await showBoostTypeMenu(supabase, chatId);
+      return;
+    }
+    if (step === "boostdur") {
+      const info =
+        (await getPendingInfo(supabase, chatId, "bud")) ??
+        (await getPendingInfo(supabase, chatId, "boostdur"));
+      if (!info) {
+        await showBoostTypeMenu(supabase, chatId);
+        return;
+      }
+      info.title = info.base_title ?? info.title;
+      await showBoostDuration(supabase, chatId, info);
+      return;
+    }
     if (step === "botpick") {
       await askBotLink(supabase, chatId);
       return;
