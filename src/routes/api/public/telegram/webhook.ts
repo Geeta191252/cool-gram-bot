@@ -1381,7 +1381,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await showBoostTypeMenu(supabase, chatId);
       return;
     }
-    const plan = BOOST_PLANS.find((p) => p.key === data.split(":")[1]) ?? BOOST_PLANS[0];
+    const plan = BOOST_PLANS.find((p) => p.key === data.split(":")[1]) ?? BOOST_PLANS[0]!;
     info.days = plan.days;
     info.reward = plan.price;
     info.audience = "no restrictions";
