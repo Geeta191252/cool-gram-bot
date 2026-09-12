@@ -508,6 +508,48 @@ async function askChatPicker(
   });
 }
 
+const BOOST_PLANS: { key: string; days: number; price: number }[] = [
+  { key: "7", days: 7, price: 21000 },
+  { key: "30", days: 30, price: 90000 },
+];
+
+async function showBoostTypeMenu(supabase: ReturnType<typeof db>, chatId: number) {
+  await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+  await send(
+    chatId,
+    "⚡️ <b>Choose a channel or group for Telegram Boost</b>\nIt must be public (with an @link).",
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "📣 Channel", callback_data: "boostpick:channel" }],
+          [{ text: "👥 Group", callback_data: "boostpick:group" }],
+          [{ text: "🔙 Back", callback_data: "promo_menu" }],
+        ],
+      },
+    },
+  );
+}
+
+async function showBoostDuration(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `boostdur:${JSON.stringify(info)}` })
+    .eq("tg_id", chatId);
+  await send(chatId, "🕐 <b>Choose the Telegram Boost duration.</b>", {
+    reply_markup: {
+      inline_keyboard: [
+        ...BOOST_PLANS.map((p) => [
+          {
+            text: `⚡️ ${p.days} days - ${p.price.toLocaleString("en-US")} ${COIN}`,
+            callback_data: `boostdur:${p.key}`,
+          },
+        ]),
+        [{ text: "🔙 Back", callback_data: "back:boosttype" }],
+      ],
+    },
+  });
+}
+
 async function showBotPromoInfo(supabase: ReturnType<typeof db>, chatId: number) {
   await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
   await tg("sendMessage", {
