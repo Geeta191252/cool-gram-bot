@@ -508,6 +508,48 @@ async function askChatPicker(
   });
 }
 
+const BOOST_PLANS: { key: string; days: number; price: number }[] = [
+  { key: "7", days: 7, price: 21000 },
+  { key: "30", days: 30, price: 90000 },
+];
+
+async function showBoostTypeMenu(supabase: ReturnType<typeof db>, chatId: number) {
+  await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+  await send(
+    chatId,
+    "⚡️ <b>Choose a channel or group for Telegram Boost</b>\nIt must be public (with an @link).",
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "📣 Channel", callback_data: "boostpick:channel" }],
+          [{ text: "👥 Group", callback_data: "boostpick:group" }],
+          [{ text: "🔙 Back", callback_data: "promo_menu" }],
+        ],
+      },
+    },
+  );
+}
+
+async function showBoostDuration(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: `boostdur:${JSON.stringify(info)}` })
+    .eq("tg_id", chatId);
+  await send(chatId, "🕐 <b>Choose the Telegram Boost duration.</b>", {
+    reply_markup: {
+      inline_keyboard: [
+        ...BOOST_PLANS.map((p) => [
+          {
+            text: `⚡️ ${p.days} days - ${p.price.toLocaleString("en-US")} ${COIN}`,
+            callback_data: `boostdur:${p.key}`,
+          },
+        ]),
+        [{ text: "🔙 Back", callback_data: "back:boosttype" }],
+      ],
+    },
+  });
+}
+
 async function showBotPromoInfo(supabase: ReturnType<typeof db>, chatId: number) {
   await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
   await tg("sendMessage", {
@@ -774,6 +816,25 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
     ? `https://t.me/${shared.username}`
     : `https://t.me/c/${String(shared.chat_id).replace("-100", "")}`;
 
+  if (category.startsWith("boost_")) {
+    if (!shared.username) {
+      await send(
+        chatId,
+        "❌ This chat is private. Telegram Boost promotion needs a <b>public</b> channel or group (with an @link). Choose another one.",
+      );
+      await showBoostTypeMenu(supabase, chatId);
+      return;
+    }
+    await showBoostDuration(supabase, chatId, {
+      category: "boost",
+      kind: category.slice(6),
+      title,
+      link,
+      src_chat: shared.chat_id,
+    });
+    return;
+  }
+
   const baseMin = category === "groups" ? 600 : 750;
 
   await supabase
@@ -889,13 +950,14 @@ async function askCount(
   if (max >= 1) {
     rows.push([{ text: `${max.toLocaleString("en-US")} (Maximum for your balance)`, callback_data: "cnt_max" }]);
   }
-  rows.push([{ text: "⬅️ Back", callback_data: "aud_back" }]);
+  const isBoost = info.category === "boost";
+  rows.push([{ text: "⬅️ Back", callback_data: isBoost ? "back:boostdur" : "aud_back" }]);
   await send(
     chatId,
     `ℹ️ <b>Task creation commission — 15%.</b>\n\n` +
-      `<blockquote>💲 ${info.category === "bots" ? "Bot launch price" : "Task price"} — ${price.toLocaleString("en-US")} ${COIN}\n` +
+      `<blockquote>💲 ${isBoost ? "Telegram Boost price" : info.category === "bots" ? "Bot launch price" : "Task price"} — ${price.toLocaleString("en-US")} ${COIN}\n` +
       `💰 Your balance — ${balance.toLocaleString("en-US")} ${COIN}</blockquote>\n\n` +
-      `📝 <b>Enter the number of completions or choose:</b>`,
+      `📝 <b>Enter the number of ${isBoost ? "Telegram Boost" : "completions"} or choose:</b>`,
     { reply_markup: { inline_keyboard: rows } },
   );
 }
@@ -1288,7 +1350,11 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await askReactionLink(supabase, chatId);
       return;
     }
-    if (key === "channels" || key === "groups" || key === "boost") {
+    if (key === "boost") {
+      await showBoostTypeMenu(supabase, chatId);
+      return;
+    }
+    if (key === "channels" || key === "groups") {
       await askChatPicker(supabase, chatId, key, key !== "groups");
       return;
     }
@@ -1298,6 +1364,35 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       `${type?.label ?? "📢 Promotion"}\n\nEk line mein bhejein:\n<code>Title | Link | Reward | Budget</code>\n\nExample:\n<code>My Channel | https://t.me/mychannel | 5 | 100</code>`,
       { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "promo_menu" }]] } },
     );
+    return;
+  }
+
+  if (data.startsWith("boostpick:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const kind = data.split(":")[1] === "group" ? "group" : "channel";
+    await askChatPicker(supabase, chatId, `boost_${kind}`, kind === "channel");
+    return;
+  }
+
+  if (data.startsWith("boostdur:")) {
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    const info = await getPendingInfo(supabase, chatId, "boostdur");
+    if (!info) {
+      await showBoostTypeMenu(supabase, chatId);
+      return;
+    }
+    const plan = BOOST_PLANS.find((p) => p.key === data.split(":")[1]) ?? BOOST_PLANS[0]!;
+    info.days = plan.days;
+    info.reward = plan.price;
+    info.audience = "no restrictions";
+    info.base_title = info.base_title ?? info.title;
+    info.title = `${info.base_title} — ${plan.days} days boost`;
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", chatId)
+      .maybeSingle();
+    await askCount(supabase, chatId, info, Number((u as any)?.balance ?? 0));
     return;
   }
 
@@ -1453,6 +1548,22 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     const step = data.slice(5);
 
+    if (step === "boosttype") {
+      await showBoostTypeMenu(supabase, chatId);
+      return;
+    }
+    if (step === "boostdur") {
+      const info =
+        (await getPendingInfo(supabase, chatId, "bud")) ??
+        (await getPendingInfo(supabase, chatId, "boostdur"));
+      if (!info) {
+        await showBoostTypeMenu(supabase, chatId);
+        return;
+      }
+      info.title = info.base_title ?? info.title;
+      await showBoostDuration(supabase, chatId, info);
+      return;
+    }
     if (step === "botpick") {
       await askBotLink(supabase, chatId);
       return;
