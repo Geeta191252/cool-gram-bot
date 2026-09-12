@@ -816,6 +816,25 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
     ? `https://t.me/${shared.username}`
     : `https://t.me/c/${String(shared.chat_id).replace("-100", "")}`;
 
+  if (category.startsWith("boost_")) {
+    if (!shared.username) {
+      await send(
+        chatId,
+        "❌ This chat is private. Telegram Boost promotion needs a <b>public</b> channel or group (with an @link). Choose another one.",
+      );
+      await showBoostTypeMenu(supabase, chatId);
+      return;
+    }
+    await showBoostDuration(supabase, chatId, {
+      category: "boost",
+      kind: category.slice(6),
+      title,
+      link,
+      src_chat: shared.chat_id,
+    });
+    return;
+  }
+
   const baseMin = category === "groups" ? 600 : 750;
 
   await supabase
