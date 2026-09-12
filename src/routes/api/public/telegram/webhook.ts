@@ -2235,7 +2235,20 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         }
 
         try {
-          if (update.callback_query) {
+          await loadSettings(supabase);
+          if (update.pre_checkout_query) {
+            await tgRaw("answerPreCheckoutQuery", {
+              pre_checkout_query_id: update.pre_checkout_query.id,
+              ok: true,
+            });
+          } else if (update.message?.successful_payment) {
+            await handleSuccessfulPayment(
+              supabase,
+              update.message.chat.id,
+              update.message.from ?? {},
+              update.message.successful_payment,
+            );
+          } else if (update.callback_query) {
             await handleCallback(supabase, update.callback_query);
           } else {
             const message = update.message ?? update.edited_message;
