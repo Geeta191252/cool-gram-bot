@@ -638,7 +638,7 @@ async function showTask(
 
   let query = supabase
     .from("cg_ads")
-    .select("id, title, link, reward, budget_left, boost_days")
+    .select("id, title, link, reward, budget_left, boost_days, src_chat")
     .eq("is_active", true)
     .neq("owner_tg", chatId)
     .order("reward", { ascending: false });
@@ -649,9 +649,45 @@ async function showTask(
   }
   const { data: allAds } = await query;
   const doneSet = new Set(doneIds.map(String));
-  const ads = ((allAds ?? []) as any[]).filter(
-    (a) => a.budget_left >= a.reward && !doneSet.has(String(a.id)),
-  );
+
+  // Hide chats the user already completed under another campaign (same link/chat)
+  let doneRefs = new Set<string>();
+  if (doneIds.length) {
+    const { data: doneAds } = await supabase
+      .from("cg_ads")
+      .select("id, link, src_chat")
+      .in("id", doneIds);
+    doneRefs = new Set(
+      ((doneAds ?? []) as any[])
+        .map((a) => chatRefFromAd(a))
+        .filter(Boolean)
+        .map((r) => String(r).toLowerCase()),
+    );
+  }
+
+  let ads = ((allAds ?? []) as any[]).filter((a) => {
+    if (a.budget_left < a.reward || doneSet.has(String(a.id))) return false;
+    const ref = chatRefFromAd(a);
+    if (ref && doneRefs.has(String(ref).toLowerCase())) return false;
+    return true;
+  });
+
+  // For join tasks, hide chats the user is already a member of
+  if (category === "channels" || category === "groups") {
+    const candidates = ads.slice(0, 20);
+    const checks = await Promise.all(
+      candidates.map(async (a) => {
+        const ref = chatRefFromAd(a);
+        if (!ref) return false;
+        const res: any = await tg("getChatMember", { chat_id: ref, user_id: chatId });
+        const st = res?.result?.status;
+        return res?.ok === true && ["member", "administrator", "creator", "restricted"].includes(st);
+      }),
+    );
+    const joined = new Set(candidates.filter((_, i) => checks[i]).map((a) => String(a.id)));
+    if (joined.size) ads = ads.filter((a) => !joined.has(String(a.id)));
+  }
+
 
   if (!ads.length) {
     await send(
