@@ -2540,6 +2540,8 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
         if (verifyBlocked(res)) {
           await pauseUnverifiableAd(supabase, ad, cb.id);
           return;
+        }
+
 
         await tg("answerCallbackQuery", {
           callback_query_id: cb.id,
