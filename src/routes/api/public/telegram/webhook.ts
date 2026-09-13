@@ -1048,6 +1048,28 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
   const pending = (u as any)?.pending_action as string | null;
   const category = pending?.startsWith("pick:") ? pending.slice(5) : "channels";
 
+  const botId = Number(
+    String(process.env["TELEGRAM_BOT_TOKEN"] ?? process.env["COOLGRAM_BOT_TOKEN"] ?? "").split(":")[0],
+  );
+  if (botId && shared?.chat_id) {
+    const chk: any = await tg("getChatMember", { chat_id: shared.chat_id, user_id: botId });
+    const st = chk?.result?.status;
+    if (!chk?.ok || !["administrator", "creator"].includes(st)) {
+      await send(
+        chatId,
+        `\u274c <b>Cool Gram is not an admin in ${shared.title ?? "that chat"}.</b>\n\n` +
+          `Without admin rights the bot cannot verify who joined, so the campaign would never pay out.\n\n` +
+          `1. Open that chat \u2192 Administrators \u2192 Add admin\n` +
+          `2. Add <b>@CoolGram_bot</b>\n` +
+          `3. Come back and select the chat again.`,
+      );
+      const isCh = category === "channels" || category.startsWith("boost_ch");
+      if (category.startsWith("boost_")) await showBoostTypeMenu(supabase, chatId);
+      else await askChatPicker(supabase, chatId, category, isCh);
+      return;
+    }
+  }
+
   const title = shared.title ?? "My channel";
   const link = shared.username
     ? `https://t.me/${shared.username}`
@@ -1077,7 +1099,7 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
   await supabase
     .from("cg_users")
     .update({
-      pending_action: `aud:${JSON.stringify({ category, title, link, base_min_price: baseMin, min_price: baseMin })}`,
+      pending_action: `aud:${JSON.stringify({ category, title, link, base_min_price: baseMin, min_price: baseMin, src_chat: shared.chat_id })}`,
     })
     .eq("tg_id", chatId);
 
