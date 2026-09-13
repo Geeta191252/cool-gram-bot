@@ -2180,16 +2180,19 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const adId = data.slice(5);
     const { data: ad } = await supabase
       .from("cg_ads")
-      .select("id, title, reward, budget_left, is_active, category, link, src_chat")
+      .select("id, title, reward, budget_left, is_active, category, link, src_chat, boost_days")
       .eq("id", adId)
       .maybeSingle();
 
-    if (!ad || !(ad as any).is_active || (ad as any).budget_left < (ad as any).reward) {
+    const catEarly = (ad as any)?.category as string;
+    const needed =
+      catEarly === "boost" ? boostDayReward(ad) : Number((ad as any)?.reward ?? 0);
+    if (!ad || !(ad as any).is_active || (ad as any).budget_left < needed) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "This task is no longer available." });
       return;
     }
 
-    const cat = (ad as any).category as string;
+    const cat = catEarly;
     if (cat === "boost") {
       if (!cb.from?.is_premium) {
         await tg("answerCallbackQuery", {
@@ -2220,6 +2223,8 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
         });
         return;
       }
+      await handleBoostClaim(supabase, chatId, ad, cb.id);
+      return;
     } else if (cat === "channels" || cat === "groups") {
       const ref = chatRefFromAd(ad);
       if (!ref) {
