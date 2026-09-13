@@ -111,6 +111,36 @@ function chatRefFromAd(ad: any): string | number | null {
 }
 
 
+function verifyBlocked(res: any): boolean {
+  const d = String(res?.description ?? "").toLowerCase();
+  return (
+    !res?.ok &&
+    (d.includes("member list is inaccessible") ||
+      d.includes("chat not found") ||
+      d.includes("bot is not a member") ||
+      d.includes("not enough rights") ||
+      d.includes("user not found"))
+  );
+}
+
+async function pauseUnverifiableAd(supabase: any, ad: any, cbId: string) {
+  await supabase.from("cg_ads").update({ is_active: false }).eq("id", ad.id);
+  await tg("answerCallbackQuery", {
+    callback_query_id: cbId,
+    text:
+      "\u26a0\ufe0f This task can't be verified because Cool Gram is not an admin in that chat. The task has been paused \u2014 here is another one.",
+    show_alert: true,
+  });
+  if (ad?.owner_tg) {
+    await send(
+      Number(ad.owner_tg),
+      `\u26a0\ufe0f Your campaign <b>${ad.title}</b> has been paused.\n\n` +
+        `Cool Gram must be an administrator in that chat to verify completions. ` +
+        `Add the bot as an admin, then reactivate the campaign from \ud83d\udce2 Promotion \u2192 My Tasks.`,
+    );
+  }
+}
+
 async function tg(method: string, payload: unknown) {
   // Callback spinners ko block na karein — fire and forget
   if (method === "answerCallbackQuery") {
@@ -2417,9 +2447,10 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const adId = data.slice(5);
     const { data: ad } = await supabase
       .from("cg_ads")
-      .select("id, title, reward, budget_left, is_active, category, link, src_chat, boost_days")
+      .select("id, title, reward, budget_left, is_active, category, link, src_chat, boost_days, owner_tg")
       .eq("id", adId)
       .maybeSingle();
+
 
     const catEarly = (ad as any)?.category as string;
     const needed =
@@ -2451,6 +2482,11 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       const res: any = await tg("getUserChatBoosts", { chat_id: ref, user_id: chatId });
       const boosts = res?.result?.boosts ?? [];
       if (!res?.ok || !Array.isArray(boosts) || boosts.length === 0) {
+        if (verifyBlocked(res)) {
+          await pauseUnverifiableAd(supabase, ad, cb.id);
+          await showTask(supabase, chatId, cat, 0, undefined, Boolean(cb.from?.is_premium));
+          return;
+        }
         await tg("answerCallbackQuery", {
           callback_query_id: cb.id,
           text: res?.ok
@@ -2476,6 +2512,11 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       const status = res?.result?.status;
       const joined = ["member", "administrator", "creator", "restricted"].includes(status);
       if (!joined) {
+        if (verifyBlocked(res)) {
+          await pauseUnverifiableAd(supabase, ad, cb.id);
+          await showTask(supabase, chatId, cat, 0, undefined, Boolean(cb.from?.is_premium));
+          return;
+        }
         await tg("answerCallbackQuery", {
           callback_query_id: cb.id,
           text: res?.ok
