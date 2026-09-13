@@ -2535,6 +2535,8 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         const update = await request.json();
         const supabase = db();
 
+        const settingsPromise = loadSettings(supabase);
+
         if (typeof update.update_id === "number") {
           const { error } = await supabase
             .from("cg_telegram_updates")
@@ -2543,7 +2545,8 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         }
 
         try {
-          await loadSettings(supabase);
+          await settingsPromise;
+
           if (update.pre_checkout_query) {
             await tgRaw("answerPreCheckoutQuery", {
               pre_checkout_query_id: update.pre_checkout_query.id,
