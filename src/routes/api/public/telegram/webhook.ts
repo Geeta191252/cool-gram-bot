@@ -42,6 +42,7 @@ const SETTINGS: Record<string, { def: number; label: string }> = {
   bot_cond_surcharge: { def: 300, label: "Bot conditions audience surcharge" },
   commission_pct: { def: 15, label: "Task creation commission (%)" },
   star_rate: { def: 1900, label: `${COIN} credited per 1 Telegram Star` },
+  min_withdraw: { def: 50000, label: "Minimum withdrawal amount" },
 };
 
 let settingsMap: Record<string, number> = {};
