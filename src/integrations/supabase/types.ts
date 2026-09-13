@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       cg_ads: {
         Row: {
+          boost_days: number | null
           budget_left: number
           category: string
           created_at: string
@@ -30,6 +31,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          boost_days?: number | null
           budget_left?: number
           category?: string
           created_at?: string
@@ -44,6 +46,7 @@ export type Database = {
           title: string
         }
         Update: {
+          boost_days?: number | null
           budget_left?: number
           category?: string
           created_at?: string
@@ -58,6 +61,50 @@ export type Database = {
           title?: string
         }
         Relationships: []
+      }
+      cg_boost_claims: {
+        Row: {
+          ad_id: string
+          created_at: string
+          days_claimed: number
+          id: string
+          last_claim_at: string
+          reminded_at: string | null
+          status: string
+          tg_id: number
+          total_days: number
+        }
+        Insert: {
+          ad_id: string
+          created_at?: string
+          days_claimed?: number
+          id?: string
+          last_claim_at?: string
+          reminded_at?: string | null
+          status?: string
+          tg_id: number
+          total_days?: number
+        }
+        Update: {
+          ad_id?: string
+          created_at?: string
+          days_claimed?: number
+          id?: string
+          last_claim_at?: string
+          reminded_at?: string | null
+          status?: string
+          tg_id?: number
+          total_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cg_boost_claims_ad_id_fkey"
+            columns: ["ad_id"]
+            isOneToOne: false
+            referencedRelation: "cg_ads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cg_completions: {
         Row: {
