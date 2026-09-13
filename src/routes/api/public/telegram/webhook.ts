@@ -132,11 +132,25 @@ async function pauseUnverifiableAd(_supabase: any, ad: any, cbId: string) {
     show_alert: true,
   });
   if (ad?.owner_tg) {
+    const bot = await botUsername();
+    const isChannel = String(ad?.category ?? "").includes("channel");
     await send(
       Number(ad.owner_tg),
       `\u2139\ufe0f Cool Gram could not verify a completion for <b>${ad.title}</b>.\n\n` +
-        `Please make sure <b>@CoolGram_bot</b> is an admin in that chat. ` +
+        `Please make <b>@${bot}</b> an admin in that chat. ` +
         `Your campaign is still live.`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "🛡 Add bot as admin",
+                url: `https://t.me/${bot}?${isChannel ? "startchannel" : "startgroup"}&admin=invite_users+manage_chat${isChannel ? "+post_messages" : ""}`,
+              },
+            ],
+          ],
+        },
+      },
     );
   }
 }
