@@ -41,7 +41,7 @@ const SETTINGS: Record<string, { def: number; label: string }> = {
   aud_surcharge: { def: 100, label: "Audience filter surcharge" },
   bot_cond_surcharge: { def: 300, label: "Bot conditions audience surcharge" },
   commission_pct: { def: 15, label: "Task creation commission (%)" },
-  star_rate: { def: 100, label: `${COIN} credited per 1 Telegram Star` },
+  star_rate: { def: 1900, label: `${COIN} credited per 1 Telegram Star` },
 };
 
 let settingsMap: Record<string, number> = {};
