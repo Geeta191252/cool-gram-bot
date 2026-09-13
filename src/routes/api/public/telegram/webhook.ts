@@ -385,6 +385,15 @@ function boostUrl(link: string) {
   return `${base}?boost`;
 }
 
+function boostDays(ad: any) {
+  const d = Number(ad?.boost_days);
+  return Number.isFinite(d) && d > 0 ? d : 7;
+}
+
+function boostDayReward(ad: any) {
+  return Math.max(1, Math.floor(Number(ad?.reward ?? 0) / boostDays(ad)));
+}
+
 async function showTask(
   supabase: ReturnType<typeof db>,
   chatId: number,
