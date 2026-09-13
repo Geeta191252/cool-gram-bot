@@ -394,6 +394,32 @@ function boostDayReward(ad: any) {
   return Math.max(1, Math.floor(Number(ad?.reward ?? 0) / boostDays(ad)));
 }
 
+async function showMyTasks(supabase: ReturnType<typeof db>, chatId: number) {
+  const { data: mine } = await supabase
+    .from("cg_ads")
+    .select("id, title, reward, budget_left, is_active, category")
+    .eq("owner_tg", chatId)
+    .order("created_at", { ascending: false })
+    .limit(10);
+  const list = (mine ?? []) as any[];
+  const lines = list.map(
+    (a) =>
+      `${a.is_active ? "🟢" : "⚪️"} <b>${a.title}</b> · ${a.category}\n   Reward ${a.reward} ${COIN} • Left ${a.budget_left} ${COIN}`,
+  );
+  const rows: any[] = list
+    .filter((a) => a.is_active)
+    .map((a) => [
+      {
+        text: `❌ Cancel — ${String(a.title).slice(0, 25)}`,
+        callback_data: `cancel:${a.id}`,
+      },
+    ]);
+  rows.push([{ text: "🔙 Back", callback_data: "promo_menu" }]);
+  await send(chatId, `📋 <b>My Tasks</b>\n\n${lines.length ? lines.join("\n") : "No campaigns yet."}`, {
+    reply_markup: { inline_keyboard: rows },
+  });
+}
+
 async function showTask(
   supabase: ReturnType<typeof db>,
   chatId: number,
