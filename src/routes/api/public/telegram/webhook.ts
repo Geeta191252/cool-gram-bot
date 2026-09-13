@@ -46,13 +46,18 @@ const SETTINGS: Record<string, { def: number; label: string }> = {
 };
 
 let settingsMap: Record<string, number> = {};
+let settingsLoadedAt = 0;
+const SETTINGS_TTL_MS = 60_000;
 
-async function loadSettings(supabase: ReturnType<typeof db>) {
+async function loadSettings(supabase: ReturnType<typeof db>, force = false) {
+  if (!force && Date.now() - settingsLoadedAt < SETTINGS_TTL_MS) return;
   const { data } = await supabase.from("cg_settings").select("key, value");
   const map: Record<string, number> = {};
   for (const row of (data ?? []) as any[]) map[row.key] = Number(row.value);
   settingsMap = map;
+  settingsLoadedAt = Date.now();
 }
+
 
 function cfg(key: keyof typeof SETTINGS | string) {
   const stored = settingsMap[key];
@@ -107,7 +112,13 @@ function chatRefFromAd(ad: any): string | number | null {
 
 
 async function tg(method: string, payload: unknown) {
+  // Callback spinners ko block na karein — fire and forget
+  if (method === "answerCallbackQuery") {
+    void tgRaw(method, payload).catch(() => null);
+    return { ok: true } as any;
+  }
   const p = payload as Record<string, any>;
+
   if (
     method === "sendMessage" &&
     editCtx &&
@@ -2524,6 +2535,8 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         const update = await request.json();
         const supabase = db();
 
+        const settingsPromise = loadSettings(supabase);
+
         if (typeof update.update_id === "number") {
           const { error } = await supabase
             .from("cg_telegram_updates")
@@ -2532,7 +2545,8 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         }
 
         try {
-          await loadSettings(supabase);
+          await settingsPromise;
+
           if (update.pre_checkout_query) {
             await tgRaw("answerPreCheckoutQuery", {
               pre_checkout_query_id: update.pre_checkout_query.id,
