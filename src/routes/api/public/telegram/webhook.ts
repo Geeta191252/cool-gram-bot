@@ -1977,19 +1977,46 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
 
   if (data === "promo_mine") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    const { data: mine } = await supabase
+    await showMyTasks(supabase, chatId);
+    return;
+  }
+
+  if (data.startsWith("cancel:")) {
+    const adId = data.slice(7);
+    const { data: ad } = await supabase
       .from("cg_ads")
-      .select("title, reward, budget_left, is_active, category")
-      .eq("owner_tg", chatId)
-      .order("created_at", { ascending: false })
-      .limit(10);
-    const lines = (mine ?? []).map(
-      (a: any) =>
-        `${a.is_active ? "🟢" : "⚪️"} <b>${a.title}</b> · ${a.category}\n   Reward ${a.reward} ${COIN} • Left ${a.budget_left} ${COIN}`,
+      .select("id, owner_tg, title, budget_left, is_active")
+      .eq("id", adId)
+      .maybeSingle();
+    const a = ad as any;
+    if (!a || a.owner_tg !== chatId || !a.is_active) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "This task is already cancelled." });
+      await showMyTasks(supabase, chatId);
+      return;
+    }
+    const refund = Number(a.budget_left ?? 0);
+    await supabase.from("cg_ads").update({ is_active: false, budget_left: 0 }).eq("id", adId);
+    if (refund > 0) {
+      const { data: u } = await supabase
+        .from("cg_users")
+        .select("balance")
+        .eq("tg_id", chatId)
+        .maybeSingle();
+      await supabase
+        .from("cg_users")
+        .update({ balance: Number((u as any)?.balance ?? 0) + refund })
+        .eq("tg_id", chatId);
+      await supabase
+        .from("cg_transactions")
+        .insert({ tg_id: chatId, amount: refund, reason: `Cancelled: ${a.title}` });
+    }
+    await supabase.from("cg_boost_claims").update({ status: "cancelled" }).eq("ad_id", adId);
+    await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Task cancelled." });
+    await send(
+      chatId,
+      `🛑 <b>Task cancelled</b>\n\n${a.title}\nRefunded: <b>${refund.toLocaleString("en-US")} ${COIN}</b> (commission is not refunded).`,
     );
-    await send(chatId, `📋 <b>My Tasks</b>\n\n${lines.length ? lines.join("\n") : "No campaigns yet."}`, {
-      reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "promo_menu" }]] },
-    });
+    await showMyTasks(supabase, chatId);
     return;
   }
 
