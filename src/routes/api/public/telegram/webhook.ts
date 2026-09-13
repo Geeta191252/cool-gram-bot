@@ -713,9 +713,13 @@ async function askChatPicker(
   isChannel: boolean,
 ) {
   await supabase.from("cg_users").update({ pending_action: `pick:${category}` }).eq("tg_id", chatId);
+  const bot = await botUsername();
   await tg("sendMessage", {
     chat_id: chatId,
-    text: `📣 <b>Choose a chat or ${isChannel ? "channel" : "group"} to promote</b> (the bot must be an admin)`,
+    text:
+      `📣 <b>Choose a chat or ${isChannel ? "channel" : "group"} to promote</b>\n\n` +
+      `Tap <b>🏠 I'm an admin</b> — Telegram will add <b>@${bot}</b> as admin right there. ` +
+      `Or use the button below to make the bot admin directly.`,
     parse_mode: "HTML",
     reply_markup: {
       keyboard: [
@@ -728,6 +732,12 @@ async function askChatPicker(
               request_title: true,
               request_username: true,
               user_administrator_rights: { is_anonymous: false, can_invite_users: true },
+              bot_administrator_rights: {
+                is_anonymous: false,
+                can_manage_chat: true,
+                can_invite_users: true,
+                ...(isChannel ? { can_post_messages: true } : {}),
+              },
             },
           },
         ],
