@@ -26,10 +26,23 @@ export const Route = createFileRoute("/api/public/cron/boost-reminders")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const unauthorized = await authenticateCronRequest(request);
-        if (unauthorized) return unauthorized;
-
         const supabase = db();
+
+        const headerToken = request.headers.get("x-cron-token") ?? "";
+        let authorized = false;
+        if (headerToken) {
+          const { data: tokenRow } = await supabase
+            .from("cg_cron_tokens")
+            .select("id")
+            .eq("token", headerToken)
+            .maybeSingle();
+          authorized = Boolean(tokenRow);
+        }
+        if (!authorized) {
+          const unauthorized = await authenticateCronRequest(request);
+          if (unauthorized) return unauthorized;
+        }
+
         const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
         const { data: claims, error } = await supabase
