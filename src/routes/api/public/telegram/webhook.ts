@@ -1054,11 +1054,12 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
   if (botId && shared?.chat_id) {
     const chk: any = await tg("getChatMember", { chat_id: shared.chat_id, user_id: botId });
     const st = chk?.result?.status;
-    if (!chk?.ok || !["administrator", "creator"].includes(st)) {
+    // Only block when Telegram clearly says the bot is not inside the chat.
+    const clearlyOutside = chk?.ok === true && ["left", "kicked"].includes(st);
+    if (clearlyOutside) {
       await send(
         chatId,
-        `\u274c <b>Cool Gram is not an admin in ${shared.title ?? "that chat"}.</b>\n\n` +
-          `Without admin rights the bot cannot verify who joined, so the campaign would never pay out.\n\n` +
+        `\u274c <b>Cool Gram is not added to ${shared.title ?? "that chat"}.</b>\n\n` +
           `1. Open that chat \u2192 Administrators \u2192 Add admin\n` +
           `2. Add <b>@CoolGram_bot</b>\n` +
           `3. Come back and select the chat again.`,
@@ -1069,6 +1070,7 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
       return;
     }
   }
+
 
   const title = shared.title ?? "My channel";
   const link = shared.username
