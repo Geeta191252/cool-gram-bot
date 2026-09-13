@@ -420,6 +420,124 @@ async function showMyTasks(supabase: ReturnType<typeof db>, chatId: number) {
   });
 }
 
+async function handleBoostClaim(
+  supabase: ReturnType<typeof db>,
+  chatId: number,
+  ad: any,
+  callbackId?: string,
+) {
+  const days = boostDays(ad);
+  const perDay = boostDayReward(ad);
+
+  const { data: claimRow } = await supabase
+    .from("cg_boost_claims")
+    .select("id, days_claimed, total_days, last_claim_at, status")
+    .eq("ad_id", ad.id)
+    .eq("tg_id", chatId)
+    .maybeSingle();
+  const claim = claimRow as any;
+
+  if (claim && claim.status === "done") {
+    if (callbackId)
+      await tg("answerCallbackQuery", {
+        callback_query_id: callbackId,
+        text: "You have already finished this boost task.",
+        show_alert: true,
+      });
+    return;
+  }
+
+  if (claim) {
+    const elapsed = Date.now() - new Date(claim.last_claim_at).getTime();
+    const remain = 24 * 60 * 60 * 1000 - elapsed;
+    if (remain > 0) {
+      const h = Math.floor(remain / 3600000);
+      const m = Math.floor((remain % 3600000) / 60000);
+      if (callbackId)
+        await tg("answerCallbackQuery", {
+          callback_query_id: callbackId,
+          text: `⏳ Already paid for today. Keep the boost active — next payout in ${h}h ${m}m.`,
+          show_alert: true,
+        });
+      return;
+    }
+  }
+
+  const claimed = (claim?.days_claimed ?? 0) + 1;
+  const nowIso = new Date().toISOString();
+  if (claim) {
+    await supabase
+      .from("cg_boost_claims")
+      .update({
+        days_claimed: claimed,
+        last_claim_at: nowIso,
+        reminded_at: null,
+        status: claimed >= days ? "done" : "active",
+      })
+      .eq("id", claim.id);
+  } else {
+    const { error } = await supabase.from("cg_boost_claims").insert({
+      ad_id: ad.id,
+      tg_id: chatId,
+      total_days: days,
+      days_claimed: 1,
+      last_claim_at: nowIso,
+      status: days <= 1 ? "done" : "active",
+    });
+    if (error) {
+      if (callbackId)
+        await tg("answerCallbackQuery", { callback_query_id: callbackId, text: "Please try again." });
+      return;
+    }
+  }
+
+  const { data: user } = await supabase
+    .from("cg_users")
+    .select("balance")
+    .eq("tg_id", chatId)
+    .maybeSingle();
+  const newBalance = Number((user as any)?.balance ?? 0) + perDay;
+  await supabase.from("cg_users").update({ balance: newBalance }).eq("tg_id", chatId);
+  await supabase
+    .from("cg_ads")
+    .update({ budget_left: Math.max(0, Number(ad.budget_left) - perDay) })
+    .eq("id", ad.id);
+  await supabase
+    .from("cg_transactions")
+    .insert({ tg_id: chatId, amount: perDay, reason: `Boost day ${claimed}: ${ad.title}` });
+
+  if (callbackId)
+    await tg("answerCallbackQuery", { callback_query_id: callbackId, text: `+${perDay} ${COIN} 🎉` });
+
+  if (claimed >= days) {
+    await supabase.from("cg_completions").insert({ ad_id: ad.id, tg_id: chatId });
+    await notifyIfCampaignFinished(supabase, ad.id);
+    await send(
+      chatId,
+      `🏁 <b>Boost task finished!</b>\n\nYou kept the boost for ${days} days and earned <b>${(perDay * days).toLocaleString("en-US")} ${COIN}</b> in total.\n💰 Balance: ${newBalance.toLocaleString("en-US")} ${COIN}`,
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "cat:boost" }]] } },
+    );
+  } else {
+    await send(
+      chatId,
+      `✅ <b>Boost day ${claimed} of ${days} paid — +${perDay.toLocaleString("en-US")} ${COIN}</b>\n\n` +
+        `💰 Balance: ${newBalance.toLocaleString("en-US")} ${COIN}\n` +
+        `⚠️ Keep the boost active. Come back in <b>24 hours</b> and press Check again to get the next ${perDay.toLocaleString("en-US")} ${COIN}.\n` +
+        `If you remove the boost, the task stops and the remaining ${COIN} are lost.`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🔄 Check boost", callback_data: `done:${ad.id}` }],
+            [{ text: "🔙 Back", callback_data: "cat:boost" }],
+          ],
+        },
+      },
+    );
+  }
+}
+
+
+
 async function showTask(
   supabase: ReturnType<typeof db>,
   chatId: number,
