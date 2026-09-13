@@ -136,9 +136,9 @@ async function tg(method: string, payload: unknown) {
 const MAIN_KEYBOARD = {
   keyboard: [
     [{ text: "💰 Earnings" }, { text: "📢 Promote" }],
-    [{ text: "🧾 Checks" }, { text: "👤 My Cabinet" }],
-    [{ text: "✅ Subscription Check" }, { text: "📊 Bots and Statistics" }],
-    [{ text: "🔗 Useful Links" }, { text: "ℹ️ Instruction" }],
+    [{ text: "💸 Withdrawal" }, { text: "⭐ Deposit" }],
+    [{ text: "👛 Wallet" }, { text: "📊 Bots and Statistics" }],
+    [{ text: "🔗 Useful Links" }],
   ],
   resize_keyboard: true,
 };
