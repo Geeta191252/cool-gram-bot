@@ -746,6 +746,7 @@ const PROMO_TYPES = [
   { key: "groups", label: "👥 Group" },
   { key: "views", label: "👁 Post" },
   { key: "bots", label: "🤖 Bot" },
+  { key: "webapp", label: "📱 Bot with web app" },
   { key: "boost", label: "⚡ Premium boost (channel)" },
   { key: "reactions", label: "💙 Reactions" },
 ];
@@ -895,12 +896,14 @@ async function showBoostDuration(supabase: ReturnType<typeof db>, chatId: number
   });
 }
 
-async function showBotPromoInfo(supabase: ReturnType<typeof db>, chatId: number) {
+async function showBotPromoInfo(supabase: ReturnType<typeof db>, chatId: number, webapp = false) {
   await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
   await tg("sendMessage", {
     chat_id: chatId,
     text:
-      "🤖 <b>Choose the bot you want to promote</b>\n\n" +
+      (webapp
+        ? "📱 <b>Choose the bot with a web app (Telegram Mini App) you want to promote</b>\n\nWorkers will open your bot, launch the mini app and use it.\n\n"
+        : "🤖 <b>Choose the bot you want to promote</b>\n\n") +
       "<blockquote>❓ <b>What should you know?</b>\n" +
       "• A user can complete a task for this bot only once in COOL GRAM.\n" +
       "• Every completion can be checked for correctness before payment.\n" +
@@ -916,7 +919,7 @@ async function showBotPromoInfo(supabase: ReturnType<typeof db>, chatId: number)
     reply_markup: {
       inline_keyboard: [
         [
-          { text: "🤖 Choose bot", callback_data: "bot_pick" },
+          { text: webapp ? "📱 Choose bot" : "🤖 Choose bot", callback_data: webapp ? "bot_pick:webapp" : "bot_pick" },
           { text: "⬅️ Back", callback_data: "promo_menu" },
         ],
       ],
@@ -924,8 +927,11 @@ async function showBotPromoInfo(supabase: ReturnType<typeof db>, chatId: number)
   });
 }
 
-async function askBotLink(supabase: ReturnType<typeof db>, chatId: number) {
-  await supabase.from("cg_users").update({ pending_action: "botlink" }).eq("tg_id", chatId);
+async function askBotLink(supabase: ReturnType<typeof db>, chatId: number, webapp = false) {
+  await supabase
+    .from("cg_users")
+    .update({ pending_action: webapp ? "botlinkwa" : "botlink" })
+    .eq("tg_id", chatId);
   await tg("sendMessage", {
     chat_id: chatId,
     text: "🤖 Select a bot.",
@@ -952,6 +958,12 @@ async function askBotLink(supabase: ReturnType<typeof db>, chatId: number) {
 }
 
 async function handleUsersShared(supabase: ReturnType<typeof db>, chatId: number, shared: any) {
+  const { data: pu } = await supabase
+    .from("cg_users")
+    .select("pending_action")
+    .eq("tg_id", chatId)
+    .maybeSingle();
+  const isWebapp = (pu as any)?.pending_action === "botlinkwa";
   const picked = (shared.users ?? shared.user_ids ?? [])[0];
   const uname = typeof picked === "object" ? picked?.username : undefined;
   const title = (typeof picked === "object" ? picked?.first_name : undefined) ?? uname ?? "My bot";
@@ -964,7 +976,7 @@ async function handleUsersShared(supabase: ReturnType<typeof db>, chatId: number
     return;
   }
   const link = `https://t.me/${uname}`;
-  await askBotRefLink(supabase, chatId, { category: "bots", title, link });
+  await askBotRefLink(supabase, chatId, { category: "bots", title, link, webapp: isWebapp });
 }
 
 async function setPending(supabase: ReturnType<typeof db>, chatId: number, prefix: string, info: any) {
@@ -1009,6 +1021,11 @@ async function askBotRefLink(supabase: ReturnType<typeof db>, chatId: number, in
 }
 
 async function showBotTaskType(supabase: ReturnType<typeof db>, chatId: number, info: any) {
+  if (info.webapp) {
+    info.task_type = "Bot with web app";
+    await showBotAudience(supabase, chatId, info);
+    return;
+  }
   await setPending(supabase, chatId, "bottype", info);
   await tg("sendMessage", {
     chat_id: chatId,
@@ -1064,7 +1081,7 @@ async function showBotAudience(supabase: ReturnType<typeof db>, chatId: number, 
       inline_keyboard: [
         [{ text: "1️⃣ All users", callback_data: "botaud:all" }],
         [{ text: "2️⃣ Telegram Premium only", callback_data: "botaud:premium" }],
-        [{ text: "⬅️ Back", callback_data: cond ? "back:botcond" : "back:bottype" }],
+        [{ text: "⬅️ Back", callback_data: cond ? "back:botcond" : info.webapp ? "back:botref" : "back:bottype" }],
       ],
     },
   });
@@ -1720,15 +1737,20 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
   if (text === "🔙 Back" || text === "⬅️ Back" || text === "🏠 Main menu") {
     const prev = (user as any)?.pending_action as string | null;
     await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
-    if (text !== "🏠 Main menu" && prev === "botlink") {
-      await showBotPromoInfo(supabase, chatId);
+    if (text !== "🏠 Main menu" && (prev === "botlink" || prev === "botlinkwa")) {
+      await showBotPromoInfo(supabase, chatId, prev === "botlinkwa");
       return;
     }
     await showPromoteMenu(supabase, chatId);
     return;
   }
 
-  if (user?.pending_action === "botlink" && !isMenu && !text.startsWith("/")) {
+  if (
+    (user?.pending_action === "botlink" || user?.pending_action === "botlinkwa") &&
+    !isMenu &&
+    !text.startsWith("/")
+  ) {
+    const waMode = user.pending_action === "botlinkwa";
     const raw = text.trim();
     const uname = raw.replace(/^https?:\/\/t\.me\//i, "").replace(/^@/, "").split(/[/?\s]/)[0] ?? "";
     if (!/^[A-Za-z0-9_]{4,32}$/.test(uname)) {
@@ -1739,6 +1761,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       category: "bots",
       title: `@${uname}`,
       link: `https://t.me/${uname}`,
+      webapp: waMode,
     });
     return;
   }
@@ -2043,6 +2066,10 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await showBotPromoInfo(supabase, chatId);
       return;
     }
+    if (key === "webapp") {
+      await showBotPromoInfo(supabase, chatId, true);
+      return;
+    }
     if (key === "reactions") {
       await askReactionLink(supabase, chatId);
       return;
@@ -2094,9 +2121,9 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
-  if (data === "bot_pick") {
+  if (data === "bot_pick" || data === "bot_pick:webapp") {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
-    await askBotLink(supabase, chatId);
+    await askBotLink(supabase, chatId, data === "bot_pick:webapp");
     return;
   }
 
