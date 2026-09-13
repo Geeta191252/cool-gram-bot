@@ -123,23 +123,24 @@ function verifyBlocked(res: any): boolean {
   );
 }
 
-async function pauseUnverifiableAd(supabase: any, ad: any, cbId: string) {
-  await supabase.from("cg_ads").update({ is_active: false }).eq("id", ad.id);
+async function pauseUnverifiableAd(_supabase: any, ad: any, cbId: string) {
+  // Campaign stays active — we never delete or pause it. We just tell both sides.
   await tg("answerCallbackQuery", {
     callback_query_id: cbId,
     text:
-      "\u26a0\ufe0f This task can't be verified because Cool Gram is not an admin in that chat. The task has been paused \u2014 here is another one.",
+      "\u26a0\ufe0f Cool Gram can't verify this chat right now. Make sure you joined, then press Check again.",
     show_alert: true,
   });
   if (ad?.owner_tg) {
     await send(
       Number(ad.owner_tg),
-      `\u26a0\ufe0f Your campaign <b>${ad.title}</b> has been paused.\n\n` +
-        `Cool Gram must be an administrator in that chat to verify completions. ` +
-        `Add the bot as an admin, then reactivate the campaign from \ud83d\udce2 Promotion \u2192 My Tasks.`,
+      `\u2139\ufe0f Cool Gram could not verify a completion for <b>${ad.title}</b>.\n\n` +
+        `Please make sure <b>@CoolGram_bot</b> is an admin in that chat. ` +
+        `Your campaign is still live.`,
     );
   }
 }
+
 
 async function tg(method: string, payload: unknown) {
   // Callback spinners ko block na karein — fire and forget
