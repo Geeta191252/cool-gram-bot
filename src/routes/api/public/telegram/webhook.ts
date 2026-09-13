@@ -112,7 +112,13 @@ function chatRefFromAd(ad: any): string | number | null {
 
 
 async function tg(method: string, payload: unknown) {
+  // Callback spinners ko block na karein — fire and forget
+  if (method === "answerCallbackQuery") {
+    void tgRaw(method, payload).catch(() => null);
+    return { ok: true } as any;
+  }
   const p = payload as Record<string, any>;
+
   if (
     method === "sendMessage" &&
     editCtx &&
