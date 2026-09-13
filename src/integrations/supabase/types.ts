@@ -135,6 +135,24 @@ export type Database = {
           },
         ]
       }
+      cg_cron_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          token: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          token?: string
+        }
+        Relationships: []
+      }
       cg_settings: {
         Row: {
           key: string

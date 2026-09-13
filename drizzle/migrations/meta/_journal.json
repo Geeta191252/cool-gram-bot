@@ -15,6 +15,13 @@
       "when": 1789279598929,
       "tag": "0001_boost_claims_and_days",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789279789468,
+      "tag": "0002_cron_token",
+      "breakpoints": true
     }
   ]
 }
