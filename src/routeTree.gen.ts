@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicCronBoostRemindersRouteImport } from './routes/api/public/cron/boost-reminders'
+import { Route as ApiPublicCronLeaveCheckRouteImport } from './routes/api/public/cron/leave-check'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 
 const IndexRoute = IndexRouteImport.update({
@@ -24,6 +25,11 @@ const ApiPublicCronBoostRemindersRoute =
     path: '/api/public/cron/boost-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronLeaveCheckRoute = ApiPublicCronLeaveCheckRouteImport.update({
+  id: '/api/public/cron/leave-check',
+  path: '/api/public/cron/leave-check',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicTelegramWebhookRoute =
   ApiPublicTelegramWebhookRouteImport.update({
     id: '/api/public/telegram/webhook',
@@ -34,35 +40,47 @@ const ApiPublicTelegramWebhookRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/public/cron/boost-reminders': typeof ApiPublicCronBoostRemindersRoute
+  '/api/public/cron/leave-check': typeof ApiPublicCronLeaveCheckRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/public/cron/boost-reminders': typeof ApiPublicCronBoostRemindersRoute
+  '/api/public/cron/leave-check': typeof ApiPublicCronLeaveCheckRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/public/cron/boost-reminders': typeof ApiPublicCronBoostRemindersRoute
+  '/api/public/cron/leave-check': typeof ApiPublicCronLeaveCheckRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/api/public/cron/boost-reminders' | '/api/public/telegram/webhook'
+    | '/'
+    | '/api/public/cron/boost-reminders'
+    | '/api/public/cron/leave-check'
+    | '/api/public/telegram/webhook'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/cron/boost-reminders' | '/api/public/telegram/webhook'
+  to:
+    | '/'
+    | '/api/public/cron/boost-reminders'
+    | '/api/public/cron/leave-check'
+    | '/api/public/telegram/webhook'
   id:
     | '__root__'
     | '/'
     | '/api/public/cron/boost-reminders'
+    | '/api/public/cron/leave-check'
     | '/api/public/telegram/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiPublicCronBoostRemindersRoute: typeof ApiPublicCronBoostRemindersRoute
+  ApiPublicCronLeaveCheckRoute: typeof ApiPublicCronLeaveCheckRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
 }
 
@@ -82,6 +100,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronBoostRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/leave-check': {
+      id: '/api/public/cron/leave-check'
+      path: '/api/public/cron/leave-check'
+      fullPath: '/api/public/cron/leave-check'
+      preLoaderRoute: typeof ApiPublicCronLeaveCheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/telegram/webhook': {
       id: '/api/public/telegram/webhook'
       path: '/api/public/telegram/webhook'
@@ -95,6 +120,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiPublicCronBoostRemindersRoute: ApiPublicCronBoostRemindersRoute,
+  ApiPublicCronLeaveCheckRoute: ApiPublicCronLeaveCheckRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
 }
 export const routeTree = rootRouteImport
