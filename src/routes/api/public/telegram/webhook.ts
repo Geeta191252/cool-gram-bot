@@ -1031,6 +1031,7 @@ async function createCampaign(
     return;
   }
   await supabase.from("cg_ads").insert({
+    boost_days: info.category === "boost" ? Number(info.days ?? 7) : null,
     owner_tg: chatId,
     title: info.title ?? "Promotion",
     link: info.link ?? "",
