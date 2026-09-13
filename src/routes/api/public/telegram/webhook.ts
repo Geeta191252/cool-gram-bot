@@ -449,7 +449,10 @@ async function showTask(
         ]
       : [
           {
-            text: `💲 +${ad.reward.toLocaleString("en-US")} | ${verb}`,
+            text:
+              category === "boost"
+                ? `💲 +${boostDayReward(ad).toLocaleString("en-US")} / day | ${verb}`
+                : `💲 +${ad.reward.toLocaleString("en-US")} | ${verb}`,
             url: category === "boost" ? boostUrl(ad.link) : ad.link,
           },
           { text: "🔄 Check", callback_data: `done:${ad.id}` },
