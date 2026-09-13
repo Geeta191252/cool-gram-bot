@@ -123,23 +123,24 @@ function verifyBlocked(res: any): boolean {
   );
 }
 
-async function pauseUnverifiableAd(supabase: any, ad: any, cbId: string) {
-  await supabase.from("cg_ads").update({ is_active: false }).eq("id", ad.id);
+async function pauseUnverifiableAd(_supabase: any, ad: any, cbId: string) {
+  // Campaign stays active — we never delete or pause it. We just tell both sides.
   await tg("answerCallbackQuery", {
     callback_query_id: cbId,
     text:
-      "\u26a0\ufe0f This task can't be verified because Cool Gram is not an admin in that chat. The task has been paused \u2014 here is another one.",
+      "\u26a0\ufe0f Cool Gram can't verify this chat right now. Make sure you joined, then press Check again.",
     show_alert: true,
   });
   if (ad?.owner_tg) {
     await send(
       Number(ad.owner_tg),
-      `\u26a0\ufe0f Your campaign <b>${ad.title}</b> has been paused.\n\n` +
-        `Cool Gram must be an administrator in that chat to verify completions. ` +
-        `Add the bot as an admin, then reactivate the campaign from \ud83d\udce2 Promotion \u2192 My Tasks.`,
+      `\u2139\ufe0f Cool Gram could not verify a completion for <b>${ad.title}</b>.\n\n` +
+        `Please make sure <b>@CoolGram_bot</b> is an admin in that chat. ` +
+        `Your campaign is still live.`,
     );
   }
 }
+
 
 async function tg(method: string, payload: unknown) {
   // Callback spinners ko block na karein — fire and forget
@@ -1054,11 +1055,12 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
   if (botId && shared?.chat_id) {
     const chk: any = await tg("getChatMember", { chat_id: shared.chat_id, user_id: botId });
     const st = chk?.result?.status;
-    if (!chk?.ok || !["administrator", "creator"].includes(st)) {
+    // Only block when Telegram clearly says the bot is not inside the chat.
+    const clearlyOutside = chk?.ok === true && ["left", "kicked"].includes(st);
+    if (clearlyOutside) {
       await send(
         chatId,
-        `\u274c <b>Cool Gram is not an admin in ${shared.title ?? "that chat"}.</b>\n\n` +
-          `Without admin rights the bot cannot verify who joined, so the campaign would never pay out.\n\n` +
+        `\u274c <b>Cool Gram is not added to ${shared.title ?? "that chat"}.</b>\n\n` +
           `1. Open that chat \u2192 Administrators \u2192 Add admin\n` +
           `2. Add <b>@CoolGram_bot</b>\n` +
           `3. Come back and select the chat again.`,
@@ -1069,6 +1071,7 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
       return;
     }
   }
+
 
   const title = shared.title ?? "My channel";
   const link = shared.username
@@ -2536,9 +2539,10 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       if (!joined) {
         if (verifyBlocked(res)) {
           await pauseUnverifiableAd(supabase, ad, cb.id);
-          await showTask(supabase, chatId, cat, 0, undefined, Boolean(cb.from?.is_premium));
           return;
         }
+
+
         await tg("answerCallbackQuery", {
           callback_query_id: cb.id,
           text: res?.ok
