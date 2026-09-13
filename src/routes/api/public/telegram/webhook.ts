@@ -1489,6 +1489,39 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     return;
   }
 
+  if (user?.pending_action === "withdraw" && /^\d+$/.test(text.trim())) {
+    const amount = Number(text.trim());
+    const min = cfg("min_withdraw");
+    if (amount < min) {
+      await send(chatId, `⚠️ Minimum withdrawal is <b>${min.toLocaleString("en-US")} ${COIN}</b>.`);
+      return;
+    }
+    if (amount > Number(user.balance)) {
+      await send(chatId, `⚠️ Not enough balance. You have <b>${user.balance} ${COIN}</b>.`);
+      return;
+    }
+    await supabase
+      .from("cg_users")
+      .update({ balance: Number(user.balance) - amount, pending_action: null })
+      .eq("tg_id", chatId);
+    await supabase.from("cg_transactions").insert({
+      tg_id: chatId,
+      amount: -amount,
+      reason: "Withdrawal request",
+    });
+    await send(
+      chatId,
+      `✅ <b>Withdrawal requested</b>\n\nAmount: <b>${amount.toLocaleString("en-US")} ${COIN}</b>\nYour request is being processed. The admin will contact you shortly.`,
+    );
+    await send(
+      OWNER_TG,
+      `💸 <b>New withdrawal request</b>\n\nUser: <code>${chatId}</code>${user.username ? ` (@${user.username})` : ""}\nAmount: <b>${amount.toLocaleString("en-US")} ${COIN}</b>\nBalance left: <b>${Number(user.balance) - amount} ${COIN}</b>`,
+    );
+    return;
+  }
+
+
+
   const isMenu = MAIN_KEYBOARD.keyboard.flat().some((b) => b.text === text);
   if (isMenu && user?.pending_action) {
     await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
