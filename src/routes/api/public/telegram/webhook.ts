@@ -1509,14 +1509,30 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       amount: -amount,
       reason: "Withdrawal request",
     });
+    const uname = (user as any).username as string | undefined;
+    const { data: wd } = await supabase
+      .from("cg_withdrawals")
+      .insert({ tg_id: chatId, username: uname ?? null, amount, status: "pending" })
+      .select("id")
+      .single();
     await send(
       chatId,
       `✅ <b>Withdrawal requested</b>\n\nAmount: <b>${amount.toLocaleString("en-US")} ${COIN}</b>\nYour request is being processed. The admin will contact you shortly.`,
     );
+    const mention = `<a href="tg://user?id=${chatId}">${uname ? "@" + uname : "User " + chatId}</a>`;
     await send(
       OWNER_TG,
-      `💸 <b>New withdrawal request</b>\n\nUser: <code>${chatId}</code>${(user as any).username ? ` (@${(user as any).username})` : ""}\nAmount: <b>${amount.toLocaleString("en-US")} ${COIN}</b>\nBalance left: <b>${Number(user.balance) - amount} ${COIN}</b>`,
+      `💸 <b>New withdrawal request</b>\n\nUser: ${mention}\nID: <code>${chatId}</code>\nAmount: <b>${amount.toLocaleString("en-US")} ${COIN}</b>\nBalance left: <b>${(Number(user.balance) - amount).toLocaleString("en-US")} ${COIN}</b>`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "✅ Mark as Paid", callback_data: `wd:ok:${wd?.id}` }],
+            [{ text: "❌ Reject & refund", callback_data: `wd:no:${wd?.id}` }],
+          ],
+        },
+      },
     );
+
     return;
   }
 
