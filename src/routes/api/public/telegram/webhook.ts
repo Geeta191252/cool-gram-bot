@@ -1697,7 +1697,19 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
       await showPromoteMenu(supabase, chatId);
       return;
-    case "🧾 Checks": {
+    case "💸 Withdrawal": {
+      const min = cfg("min_withdraw");
+      await supabase.from("cg_users").update({ pending_action: "withdraw" }).eq("tg_id", chatId);
+      await send(
+        chatId,
+        `💸 <b>Withdrawal</b>\n\nBalance: <b>${user.balance} ${COIN}</b>\nMinimum withdrawal: <b>${min.toLocaleString("en-US")} ${COIN}</b>\n\nSend the amount you want to withdraw.`,
+      );
+      return;
+    }
+    case "⭐ Deposit":
+      await showDepositMenu(supabase, chatId);
+      return;
+    case "👛 Wallet": {
       const { data: tx } = await supabase
         .from("cg_transactions")
         .select("amount, reason, created_at")
@@ -1707,28 +1719,14 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       const lines = (tx ?? []).map(
         (t: any) => `${t.amount > 0 ? "🟢 +" : "🔴 "}${t.amount} ${COIN} — ${t.reason}`,
       );
-      await send(chatId, `🧾 <b>Last activity</b>\n\n${lines.length ? lines.join("\n") : "No activity yet."}`);
-      return;
-    }
-    case "👤 My Cabinet":
       await send(
         chatId,
-        `👤 <b>My Cabinet</b>\n\nID: <code>${chatId}</code>\nBalance: <b>${user.balance} ${COIN}</b>\nReferrals: <b>${user.referral_count}</b>\n\n🔗 Your invite link:\nhttps://t.me/${bot}?start=ref_${chatId}\n\nYou get <b>+${REFERRAL_BONUS} ${COIN}</b> per invite.`,
+        `👛 <b>Wallet</b>\n\nID: <code>${chatId}</code>\nBalance: <b>${user.balance} ${COIN}</b>\nReferrals: <b>${user.referral_count}</b>\n\n🔗 Your invite link:\nhttps://t.me/${bot}?start=ref_${chatId}\nYou get <b>+${REFERRAL_BONUS} ${COIN}</b> per invite.\n\n🧾 <b>Last activity</b>\n${lines.length ? lines.join("\n") : "No activity yet."}`,
         {
           reply_markup: {
             inline_keyboard: [[{ text: "⭐ Deposit with Telegram Stars", callback_data: "dep_menu" }]],
           },
         },
-      );
-      return;
-    case "✅ Subscription Check": {
-      const { count } = await supabase
-        .from("cg_completions")
-        .select("id", { count: "exact", head: true })
-        .eq("tg_id", chatId);
-      await send(
-        chatId,
-        `✅ <b>Subscription Check</b>\n\nYou have completed <b>${count ?? 0}</b> tasks so far.\n\nNote: do not leave the channels you joined, otherwise future tasks may be blocked.`,
       );
       return;
     }
