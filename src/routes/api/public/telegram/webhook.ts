@@ -133,6 +133,7 @@ async function pauseUnverifiableAd(_supabase: any, ad: any, cbId: string) {
     : null;
   const botStatus = botCheck?.result?.status;
   const botIsAdmin = botCheck?.ok === true && ["administrator", "creator"].includes(botStatus);
+  const botIsOutside = botCheck?.ok === true && ["left", "kicked"].includes(botStatus);
 
   // Campaign stays active — we never delete or pause it.
   await tg("answerCallbackQuery", {
@@ -145,10 +146,10 @@ async function pauseUnverifiableAd(_supabase: any, ad: any, cbId: string) {
   if (ad?.owner_tg) {
     const bot = await botUsername();
     const isChannel = String(ad?.category ?? "").includes("channel");
-    if (botIsAdmin) {
+    if (botIsAdmin || !botIsOutside) {
       await send(
         Number(ad.owner_tg),
-        `ℹ️ <b>@${bot} is already an admin in ${ad.title}.</b>\n\nTelegram temporarily could not verify one member. No action is needed and your campaign is still live.`,
+        `ℹ️ <b>Your campaign ${ad.title} is still live.</b>\n\nTelegram temporarily could not verify one member. No action is needed.`,
       );
       return;
     }
@@ -750,19 +751,24 @@ async function askChatPicker(
     chat_id: chatId,
     text:
       `📣 <b>Choose a chat or ${isChannel ? "channel" : "group"} to promote</b>\n\n` +
-      `Tap <b>🏠 I'm an admin</b>. Telegram will keep the bot's existing admin access or add <b>@${bot}</b> if needed.`,
+      `Tap <b>🏠 Select my chat</b>. Telegram will add <b>@${bot}</b> as admin if needed, then return you here automatically.`,
     parse_mode: "HTML",
     reply_markup: {
       keyboard: [
         [
           {
-            text: "🏠 I'm an admin",
+            text: "🏠 Select my chat",
             request_chat: {
               request_id: 1,
               chat_is_channel: isChannel,
               request_title: true,
               request_username: true,
-              user_administrator_rights: { is_anonymous: false, can_invite_users: true },
+              user_administrator_rights: {
+                is_anonymous: false,
+                can_manage_chat: true,
+                can_invite_users: true,
+                ...(isChannel ? { can_post_messages: true } : {}),
+              },
               bot_administrator_rights: {
                 is_anonymous: false,
                 can_manage_chat: true,
@@ -788,6 +794,30 @@ async function askChatPicker(
       resize_keyboard: true,
       one_time_keyboard: true,
     },
+  });
+}
+
+async function handleBotMembershipUpdate(supabase: ReturnType<typeof db>, membership: any) {
+  const userId = Number(membership?.from?.id);
+  const chat = membership?.chat;
+  const status = String(membership?.new_chat_member?.status ?? "");
+  if (!userId || !chat?.id || !["administrator", "creator"].includes(status)) return;
+
+  const { data: user } = await supabase
+    .from("cg_users")
+    .select("pending_action")
+    .eq("tg_id", userId)
+    .maybeSingle();
+  const pending = String((user as any)?.pending_action ?? "");
+  if (!pending.startsWith("pick:")) return;
+
+  await send(userId, `✅ <b>Cool Gram is now an admin in ${chat.title ?? "your chat"}.</b>\n\nContinuing your promotion setup…`, {
+    reply_markup: { remove_keyboard: true },
+  });
+  await handleChatShared(supabase, userId, {
+    chat_id: chat.id,
+    title: chat.title,
+    username: chat.username,
   });
 }
 
@@ -2669,6 +2699,8 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
             );
           } else if (update.callback_query) {
             await handleCallback(supabase, update.callback_query);
+          } else if (update.my_chat_member) {
+            await handleBotMembershipUpdate(supabase, update.my_chat_member);
           } else {
             const message = update.message ?? update.edited_message;
             const chatId = message?.chat?.id;
