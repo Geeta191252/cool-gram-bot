@@ -1515,7 +1515,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     );
     await send(
       OWNER_TG,
-      `💸 <b>New withdrawal request</b>\n\nUser: <code>${chatId}</code>${user.username ? ` (@${user.username})` : ""}\nAmount: <b>${amount.toLocaleString("en-US")} ${COIN}</b>\nBalance left: <b>${Number(user.balance) - amount} ${COIN}</b>`,
+      `💸 <b>New withdrawal request</b>\n\nUser: <code>${chatId}</code>${(user as any).username ? ` (@${(user as any).username})` : ""}\nAmount: <b>${amount.toLocaleString("en-US")} ${COIN}</b>\nBalance left: <b>${Number(user.balance) - amount} ${COIN}</b>`,
     );
     return;
   }
