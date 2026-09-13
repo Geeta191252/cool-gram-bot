@@ -320,7 +320,8 @@ function listHeader(category?: string) {
       "⚡️ <b>Premium boost tasks</b>\n\n" +
       "Only Telegram Premium users can boost a channel or group.\n" +
       "Press <b>Boost</b>, confirm the boost in Telegram, then press <b>Check</b>.\n\n" +
-      "⚠️ Don't remove your boost earlier than 7 days, otherwise the GRAM earned will be revoked."
+      "💰 You are paid <b>every day</b> for keeping the boost active. Press <b>Check</b> once every 24 hours to get the daily payout — the bot will remind you.\n" +
+      "⚠️ If you remove the boost before the task ends, the remaining payouts are lost."
     );
 
   return "⚠️ Don't leave channels earlier than 7 days. Otherwise task completion will be blocked and the GRAM earned from them revoked.";
