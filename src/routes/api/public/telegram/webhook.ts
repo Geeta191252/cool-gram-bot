@@ -1982,6 +1982,65 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+  if (data.startsWith("wd:")) {
+    const [, act, wid] = data.split(":");
+    if (chatId !== OWNER_TG) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Not allowed", show_alert: true });
+      return;
+    }
+    const { data: w } = await supabase
+      .from("cg_withdrawals")
+      .select("id,tg_id,username,amount,status")
+      .eq("id", wid)
+      .maybeSingle();
+    if (!w || (w as any).status !== "pending") {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Already handled", show_alert: true });
+      return;
+    }
+    const amt = Number((w as any).amount);
+    const uid = Number((w as any).tg_id);
+    if (act === "ok") {
+      await supabase
+        .from("cg_withdrawals")
+        .update({ status: "paid", resolved_at: new Date().toISOString() })
+        .eq("id", wid);
+      await send(uid, `✅ <b>Withdrawal completed</b>\n\nAmount: <b>${amt.toLocaleString("en-US")} ${COIN}</b>`);
+    } else {
+      const { data: u2 } = await supabase
+        .from("cg_users")
+        .select("balance")
+        .eq("tg_id", uid)
+        .maybeSingle();
+      await supabase
+        .from("cg_users")
+        .update({ balance: Number((u2 as any)?.balance ?? 0) + amt })
+        .eq("tg_id", uid);
+      await supabase.from("cg_transactions").insert({
+        tg_id: uid,
+        amount: amt,
+        reason: "Withdrawal refund",
+      });
+      await supabase
+        .from("cg_withdrawals")
+        .update({ status: "rejected", resolved_at: new Date().toISOString() })
+        .eq("id", wid);
+      await send(
+        uid,
+        `❌ <b>Withdrawal rejected</b>\n\n<b>${amt.toLocaleString("en-US")} ${COIN}</b> has been refunded to your balance.`,
+      );
+    }
+    await tg("answerCallbackQuery", {
+      callback_query_id: cb.id,
+      text: act === "ok" ? "Marked as paid" : "Rejected and refunded",
+    });
+    await tg("editMessageReplyMarkup", {
+      chat_id: chatId,
+      message_id: cb.message?.message_id,
+      reply_markup: { inline_keyboard: [[{ text: act === "ok" ? "✅ Paid" : "❌ Rejected", callback_data: "noop" }]] },
+    });
+    return;
+  }
+
   if (data === "aud_all" || data === "aud_pick" || data === "aud_save" || data.startsWith("aud_set:")) {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     const { data: u } = await supabase
