@@ -132,11 +132,25 @@ async function pauseUnverifiableAd(_supabase: any, ad: any, cbId: string) {
     show_alert: true,
   });
   if (ad?.owner_tg) {
+    const bot = await botUsername();
+    const isChannel = String(ad?.category ?? "").includes("channel");
     await send(
       Number(ad.owner_tg),
       `\u2139\ufe0f Cool Gram could not verify a completion for <b>${ad.title}</b>.\n\n` +
-        `Please make sure <b>@CoolGram_bot</b> is an admin in that chat. ` +
+        `Please make <b>@${bot}</b> an admin in that chat. ` +
         `Your campaign is still live.`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "🛡 Add bot as admin",
+                url: `https://t.me/${bot}?${isChannel ? "startchannel" : "startgroup"}&admin=invite_users+manage_chat${isChannel ? "+post_messages" : ""}`,
+              },
+            ],
+          ],
+        },
+      },
     );
   }
 }
@@ -713,9 +727,13 @@ async function askChatPicker(
   isChannel: boolean,
 ) {
   await supabase.from("cg_users").update({ pending_action: `pick:${category}` }).eq("tg_id", chatId);
+  const bot = await botUsername();
   await tg("sendMessage", {
     chat_id: chatId,
-    text: `📣 <b>Choose a chat or ${isChannel ? "channel" : "group"} to promote</b> (the bot must be an admin)`,
+    text:
+      `📣 <b>Choose a chat or ${isChannel ? "channel" : "group"} to promote</b>\n\n` +
+      `Tap <b>🏠 I'm an admin</b> — Telegram will add <b>@${bot}</b> as admin right there. ` +
+      `Or use the button below to make the bot admin directly.`,
     parse_mode: "HTML",
     reply_markup: {
       keyboard: [
@@ -728,6 +746,12 @@ async function askChatPicker(
               request_title: true,
               request_username: true,
               user_administrator_rights: { is_anonymous: false, can_invite_users: true },
+              bot_administrator_rights: {
+                is_anonymous: false,
+                can_manage_chat: true,
+                can_invite_users: true,
+                ...(isChannel ? { can_post_messages: true } : {}),
+              },
             },
           },
         ],
@@ -746,6 +770,21 @@ async function askChatPicker(
       ],
       resize_keyboard: true,
       one_time_keyboard: true,
+    },
+  });
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text: `🛡 <b>Make @${bot} admin directly</b>\nPick your ${isChannel ? "channel" : "group"} in the list Telegram shows, then confirm.`,
+    parse_mode: "HTML",
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: "🛡 Add bot as admin",
+            url: `https://t.me/${bot}?${isChannel ? "startchannel" : "startgroup"}&admin=invite_users+manage_chat${isChannel ? "+post_messages" : ""}`,
+          },
+        ],
+      ],
     },
   });
 }
