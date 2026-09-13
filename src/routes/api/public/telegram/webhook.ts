@@ -758,6 +758,21 @@ async function askChatPicker(
       one_time_keyboard: true,
     },
   });
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text: `🛡 <b>Make @${bot} admin directly</b>\nPick your ${isChannel ? "channel" : "group"} in the list Telegram shows, then confirm.`,
+    parse_mode: "HTML",
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: "🛡 Add bot as admin",
+            url: `https://t.me/${bot}?${isChannel ? "startchannel" : "startgroup"}&admin=invite_users+manage_chat${isChannel ? "+post_messages" : ""}`,
+          },
+        ],
+      ],
+    },
+  });
 }
 
 
