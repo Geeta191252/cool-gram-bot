@@ -2539,9 +2539,8 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       if (!joined) {
         if (verifyBlocked(res)) {
           await pauseUnverifiableAd(supabase, ad, cb.id);
-          await showTask(supabase, chatId, cat, 0, undefined, Boolean(cb.from?.is_premium));
           return;
-        }
+
         await tg("answerCallbackQuery", {
           callback_query_id: cb.id,
           text: res?.ok
