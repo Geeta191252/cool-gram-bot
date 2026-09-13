@@ -799,7 +799,7 @@ async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: numb
   }
   const title = originChat.title ?? "Post";
 
-  // Bot ko us channel mein admin hona chahiye
+  // The bot must be an admin in that channel
   const me = await tg("getMe", {});
   const botId = me?.result?.id;
   const botUsername = me?.result?.username;
