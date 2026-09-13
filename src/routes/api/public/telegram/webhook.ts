@@ -1509,14 +1509,30 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       amount: -amount,
       reason: "Withdrawal request",
     });
+    const uname = (user as any).username as string | undefined;
+    const { data: wd } = await supabase
+      .from("cg_withdrawals")
+      .insert({ tg_id: chatId, username: uname ?? null, amount, status: "pending" })
+      .select("id")
+      .single();
     await send(
       chatId,
       `✅ <b>Withdrawal requested</b>\n\nAmount: <b>${amount.toLocaleString("en-US")} ${COIN}</b>\nYour request is being processed. The admin will contact you shortly.`,
     );
+    const mention = `<a href="tg://user?id=${chatId}">${uname ? "@" + uname : "User " + chatId}</a>`;
     await send(
       OWNER_TG,
-      `💸 <b>New withdrawal request</b>\n\nUser: <code>${chatId}</code>${(user as any).username ? ` (@${(user as any).username})` : ""}\nAmount: <b>${amount.toLocaleString("en-US")} ${COIN}</b>\nBalance left: <b>${Number(user.balance) - amount} ${COIN}</b>`,
+      `💸 <b>New withdrawal request</b>\n\nUser: ${mention}\nID: <code>${chatId}</code>\nAmount: <b>${amount.toLocaleString("en-US")} ${COIN}</b>\nBalance left: <b>${(Number(user.balance) - amount).toLocaleString("en-US")} ${COIN}</b>`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "✅ Mark as Paid", callback_data: `wd:ok:${wd?.id}` }],
+            [{ text: "❌ Reject & refund", callback_data: `wd:no:${wd?.id}` }],
+          ],
+        },
+      },
     );
+
     return;
   }
 
@@ -1963,6 +1979,65 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       .eq("tg_id", chatId);
     await showAudienceMenu(chatId, "no restrictions", cond ? cfg("bot_cond_surcharge") : cfg("aud_surcharge"), "back:botaud");
 
+    return;
+  }
+
+  if (data.startsWith("wd:")) {
+    const [, act, wid] = data.split(":");
+    if (chatId !== OWNER_TG) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Not allowed", show_alert: true });
+      return;
+    }
+    const { data: w } = await supabase
+      .from("cg_withdrawals")
+      .select("id,tg_id,username,amount,status")
+      .eq("id", wid)
+      .maybeSingle();
+    if (!w || (w as any).status !== "pending") {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Already handled", show_alert: true });
+      return;
+    }
+    const amt = Number((w as any).amount);
+    const uid = Number((w as any).tg_id);
+    if (act === "ok") {
+      await supabase
+        .from("cg_withdrawals")
+        .update({ status: "paid", resolved_at: new Date().toISOString() })
+        .eq("id", wid);
+      await send(uid, `✅ <b>Withdrawal completed</b>\n\nAmount: <b>${amt.toLocaleString("en-US")} ${COIN}</b>`);
+    } else {
+      const { data: u2 } = await supabase
+        .from("cg_users")
+        .select("balance")
+        .eq("tg_id", uid)
+        .maybeSingle();
+      await supabase
+        .from("cg_users")
+        .update({ balance: Number((u2 as any)?.balance ?? 0) + amt })
+        .eq("tg_id", uid);
+      await supabase.from("cg_transactions").insert({
+        tg_id: uid,
+        amount: amt,
+        reason: "Withdrawal refund",
+      });
+      await supabase
+        .from("cg_withdrawals")
+        .update({ status: "rejected", resolved_at: new Date().toISOString() })
+        .eq("id", wid);
+      await send(
+        uid,
+        `❌ <b>Withdrawal rejected</b>\n\n<b>${amt.toLocaleString("en-US")} ${COIN}</b> has been refunded to your balance.`,
+      );
+    }
+    await tg("answerCallbackQuery", {
+      callback_query_id: cb.id,
+      text: act === "ok" ? "Marked as paid" : "Rejected and refunded",
+    });
+    await tg("editMessageReplyMarkup", {
+      chat_id: chatId,
+      message_id: cb.message?.message_id,
+      reply_markup: { inline_keyboard: [[{ text: act === "ok" ? "✅ Paid" : "❌ Rejected", callback_data: "noop" }]] },
+    });
     return;
   }
 

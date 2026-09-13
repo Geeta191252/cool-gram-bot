@@ -276,6 +276,36 @@ export type Database = {
         }
         Relationships: []
       }
+      cg_withdrawals: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          resolved_at: string | null
+          status: string
+          tg_id: number
+          username: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          resolved_at?: string | null
+          status?: string
+          tg_id: number
+          username?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          resolved_at?: string | null
+          status?: string
+          tg_id?: number
+          username?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
