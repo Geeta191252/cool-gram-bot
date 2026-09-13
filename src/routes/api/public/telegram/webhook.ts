@@ -46,13 +46,18 @@ const SETTINGS: Record<string, { def: number; label: string }> = {
 };
 
 let settingsMap: Record<string, number> = {};
+let settingsLoadedAt = 0;
+const SETTINGS_TTL_MS = 60_000;
 
-async function loadSettings(supabase: ReturnType<typeof db>) {
+async function loadSettings(supabase: ReturnType<typeof db>, force = false) {
+  if (!force && Date.now() - settingsLoadedAt < SETTINGS_TTL_MS) return;
   const { data } = await supabase.from("cg_settings").select("key, value");
   const map: Record<string, number> = {};
   for (const row of (data ?? []) as any[]) map[row.key] = Number(row.value);
   settingsMap = map;
+  settingsLoadedAt = Date.now();
 }
+
 
 function cfg(key: keyof typeof SETTINGS | string) {
   const stored = settingsMap[key];
