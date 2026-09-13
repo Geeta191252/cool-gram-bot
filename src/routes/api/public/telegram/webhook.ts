@@ -408,7 +408,7 @@ async function showTask(
 
   let query = supabase
     .from("cg_ads")
-    .select("id, title, link, reward, budget_left")
+    .select("id, title, link, reward, budget_left, boost_days")
     .eq("is_active", true)
     .neq("owner_tg", chatId)
     .order("reward", { ascending: false });
