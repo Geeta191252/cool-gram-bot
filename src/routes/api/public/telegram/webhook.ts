@@ -1751,7 +1751,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     case "ℹ️ Instruction":
       await send(
         chatId,
-        `ℹ️ <b>How COOL GRAM works</b>\n\n1️⃣ <b>Earnings</b> — open a task, join the channel, tap "I did it" and get ${COIN}.\n2️⃣ <b>Promote</b> — spend your ${COIN} to promote your own channel.\n3️⃣ <b>My Cabinet</b> — balance and referral link.\n4️⃣ Invite friends and earn ${REFERRAL_BONUS} ${COIN} per invite.`,
+        `ℹ️ <b>How COOL GRAM works</b>\n\n1️⃣ <b>Earnings</b> — open a task, join the channel, tap "I did it" and get ${COIN}.\n2️⃣ <b>Promote</b> — spend your ${COIN} to promote your own channel.\n3️⃣ <b>Wallet</b> — balance, history and referral link.\n4️⃣ Invite friends and earn ${REFERRAL_BONUS} ${COIN} per invite.`,
       );
       return;
     default:
