@@ -153,7 +153,7 @@ async function send(chatId: number, text: string, extra: Record<string, unknown>
   });
 }
 
-// Campaign khatam hone par owner ko notify karein
+// Notify the owner when a campaign is finished
 async function notifyIfCampaignFinished(supabase: ReturnType<typeof db>, adId: string) {
   const { data: ad } = await supabase
     .from("cg_ads")
@@ -651,7 +651,7 @@ async function handleUsersShared(supabase: ReturnType<typeof db>, chatId: number
   if (!uname) {
     await send(
       chatId,
-      "⚠️ Us bot ka username nahi mila. Uska username ya link bhejein:\n<code>@MyCoolBot</code>",
+      "⚠️ Could not get that bot's username. Send its username or link:\n<code>@MyCoolBot</code>",
       { reply_markup: MAIN_KEYBOARD },
     );
     return;
@@ -794,7 +794,7 @@ async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: numb
   const originChat = origin.chat ?? message.forward_from_chat;
   const msgId = origin.message_id ?? message.forward_from_message_id;
   if (!originChat || !msgId) {
-    await send(chatId, "⚠️ Ye post kisi channel se forward nahi hai. Channel ka post forward karein.");
+    await send(chatId, "⚠️ This post is not forwarded from a channel. Please forward a channel post.");
     return;
   }
   const title = originChat.title ?? "Post";
@@ -1059,7 +1059,7 @@ async function askAmount(supabase: ReturnType<typeof db>, chatId: number, info: 
     .eq("tg_id", chatId);
   await send(
     chatId,
-    `✅ Selected: <b>${info.title}</b>\n${info.link}\n\nAudience: <b>${info.audience ?? "no restrictions"}</b>\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
+    `✅ Selected: <b>${info.title}</b>\n${info.link}\n\nAudience: <b>${info.audience ?? "no restrictions"}</b>\n\nNow send the reward and budget:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
     { reply_markup: MAIN_KEYBOARD },
   );
 }
@@ -1351,7 +1351,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     const raw = text.trim();
     const uname = raw.replace(/^https?:\/\/t\.me\//i, "").replace(/^@/, "").split(/[/?\s]/)[0] ?? "";
     if (!/^[A-Za-z0-9_]{4,32}$/.test(uname)) {
-      await send(chatId, "⚠️ Sahi bot username bhejein, jaise <code>@MyCoolBot</code>.");
+      await send(chatId, "⚠️ Send a valid bot username, e.g. <code>@MyCoolBot</code>.");
       return;
     }
     await askBotRefLink(supabase, chatId, {
@@ -1366,7 +1366,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     const info = JSON.parse(user.pending_action.slice(7));
     const ref = text.trim();
     if (!/^https?:\/\/t\.me\/[A-Za-z0-9_]+(\?start=\S+)?$/i.test(ref)) {
-      await send(chatId, "⚠️ Sahi referral link bhejein, jaise <code>https://t.me/gram_piarbot?start=123456789</code>.");
+      await send(chatId, "⚠️ Send a valid referral link, e.g. <code>https://t.me/gram_piarbot?start=123456789</code>.");
       return;
     }
     info.ref_link = ref;
@@ -1378,7 +1378,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     const info = JSON.parse(user.pending_action.slice(8));
     const cond = text.trim();
     if (cond.length > 400) {
-      await send(chatId, "⚠️ Conditions 400 characters se zyada nahi ho sakti. Chhota karke bhejein.");
+      await send(chatId, "⚠️ Conditions cannot be longer than 400 characters. Please send a shorter text.");
       return;
     }
     info.conditions = cond;
@@ -1393,7 +1393,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     if (!/^https?:\/\/t\.me\/(c\/)?[A-Za-z0-9_]+\/\d+/.test(link)) {
       await send(
         chatId,
-        "⚠️ Sahi post link bhejein, jaise <code>https://t.me/mychannel/123</code>.",
+        "⚠️ Send a valid post link, e.g. <code>https://t.me/mychannel/123</code>.",
       );
       return;
     }
@@ -1409,7 +1409,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       .eq("tg_id", chatId);
     await send(
       chatId,
-      `✅ Post selected:\n${link}\n\nAb reward aur budget bhejein:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
+      `✅ Post selected:\n${link}\n\nNow send the reward and budget:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
       { reply_markup: MAIN_KEYBOARD },
     );
     return;
@@ -1420,7 +1420,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     const min = Number(info.min_price ?? 1);
     const price = Number(text.replace(/[,\s]/g, ""));
     if (!price || price < min) {
-      await send(chatId, `⚠️ Minimum ${min.toLocaleString("en-US")} ${COIN} hai. Sahi price bhejein.`);
+      await send(chatId, `⚠️ Minimum ${min.toLocaleString("en-US")} ${COIN}. Please send a valid price.`);
       return;
     }
     info.reward = price;
@@ -1433,7 +1433,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     const count = Number(text.replace(/[,\s]/g, ""));
     const reward = Number(info.reward);
     if (!count || count < 1 || !Number.isInteger(count)) {
-      await send(chatId, "⚠️ Completions ki sankhya (sirf number) bhejein, jaise <code>10</code>.");
+      await send(chatId, "⚠️ Send the number of completions (digits only), e.g. <code>10</code>.");
       return;
     }
     await createCampaign(supabase, chatId, info, count, Number(user.balance));
@@ -1453,7 +1453,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     const reward = Number(parts[0]);
     const budget = Number(parts[1]);
     if (parts.length !== 2 || !reward || !budget || reward < 1 || budget < reward) {
-      await send(chatId, "⚠️ Aise bhejein: <code>Reward | Budget</code>\nExample: <code>5 | 100</code>");
+      await send(chatId, "⚠️ Send it like this: <code>Reward | Budget</code>\nExample: <code>5 | 100</code>");
       return;
     }
     if (user.balance < budget) {
@@ -1477,7 +1477,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       .insert({ tg_id: chatId, amount: -budget, reason: `Promotion: ${info.title}` });
     await send(
       chatId,
-      `🚀 <b>Campaign live hai!</b>\n\n${info.title}\nReward: ${reward} ${COIN} • Budget: ${budget} ${COIN}`,
+      `🚀 <b>Campaign is live!</b>\n\n${info.title}\nReward: ${reward} ${COIN} • Budget: ${budget} ${COIN}`,
       { reply_markup: MAIN_KEYBOARD },
     );
     return;
@@ -1489,7 +1489,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     const reward = Number(rewardRaw);
     const budget = Number(budgetRaw);
     if (parts.length !== 4 || !link?.startsWith("http") || !reward || !budget || reward < 1 || budget < reward) {
-      await send(chatId, "⚠️ Format galat hai. Aise bhejein:\n<code>My Channel | https://t.me/mychannel | 5 | 100</code>");
+      await send(chatId, "⚠️ Invalid format. Send it like this:\n<code>My Channel | https://t.me/mychannel | 5 | 100</code>");
       return;
     }
     if (user.balance < budget) {
@@ -1511,7 +1511,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     await supabase
       .from("cg_transactions")
       .insert({ tg_id: chatId, amount: -budget, reason: `Promotion: ${title}` });
-    await send(chatId, `🚀 <b>Campaign live hai!</b>\n\n${title}\nReward: ${reward} ${COIN} • Budget: ${budget} ${COIN}`);
+    await send(chatId, `🚀 <b>Campaign is live!</b>\n\n${title}\nReward: ${reward} ${COIN} • Budget: ${budget} ${COIN}`);
     return;
   }
 
@@ -1548,7 +1548,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       const lines = (tx ?? []).map(
         (t: any) => `${t.amount > 0 ? "🟢 +" : "🔴 "}${t.amount} ${COIN} — ${t.reason}`,
       );
-      await send(chatId, `🧾 <b>Last activity</b>\n\n${lines.length ? lines.join("\n") : "Abhi koi activity nahi."}`);
+      await send(chatId, `🧾 <b>Last activity</b>\n\n${lines.length ? lines.join("\n") : "No activity yet."}`);
       return;
     }
     case "👤 My Cabinet":
@@ -1569,7 +1569,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
         .eq("tg_id", chatId);
       await send(
         chatId,
-        `✅ <b>Subscription Check</b>\n\nAapne ab tak <b>${count ?? 0}</b> tasks complete kiye hain.\n\nNote: jo channels aapne join kiye hain unhe leave na karein, warna aage tasks block ho sakte hain.`,
+        `✅ <b>Subscription Check</b>\n\nYou have completed <b>${count ?? 0}</b> tasks so far.\n\nNote: do not leave the channels you joined, otherwise future tasks may be blocked.`,
       );
       return;
     }
@@ -1594,11 +1594,11 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     case "ℹ️ Instruction":
       await send(
         chatId,
-        `ℹ️ <b>How COOL GRAM works</b>\n\n1️⃣ <b>Earnings</b> — task kholein, channel join karein, "I did it" dabayein aur ${COIN} paayein.\n2️⃣ <b>Promote</b> — apne ${COIN} kharch karke apna channel promote karein.\n3️⃣ <b>My Cabinet</b> — balance aur referral link.\n4️⃣ Dost invite karein aur har invite pe ${REFERRAL_BONUS} ${COIN} kamayein.`,
+        `ℹ️ <b>How COOL GRAM works</b>\n\n1️⃣ <b>Earnings</b> — open a task, join the channel, tap "I did it" and get ${COIN}.\n2️⃣ <b>Promote</b> — spend your ${COIN} to promote your own channel.\n3️⃣ <b>My Cabinet</b> — balance and referral link.\n4️⃣ Invite friends and earn ${REFERRAL_BONUS} ${COIN} per invite.`,
       );
       return;
     default:
-      await send(chatId, "🤔 Samajh nahi aaya. Neeche menu se koi option chunein.");
+      await send(chatId, "🤔 I didn't understand that. Please choose an option from the menu below.");
   }
 }
 
@@ -1646,7 +1646,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     await send(
       chatId,
-      `📝 <b>Rules</b>\n\n1️⃣ Task khol kar channel/group join karein, phir "I did it" dabayein.\n2️⃣ Join karne ke baad turant leave na karein.\n3️⃣ Ek task sirf ek baar count hota hai.\n4️⃣ Cheating par balance zero ho sakta hai.`,
+      `📝 <b>Rules</b>\n\n1️⃣ Open the task, join the channel/group, then tap "I did it".\n2️⃣ Do not leave right after joining.\n3️⃣ Each task counts only once.\n4️⃣ Cheating may reset your balance to zero.`,
       { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
     );
     return;
@@ -1679,7 +1679,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     await supabase.from("cg_users").update({ pending_action: `promote:${key}` }).eq("tg_id", chatId);
     await send(
       chatId,
-      `${type?.label ?? "📢 Promotion"}\n\nEk line mein bhejein:\n<code>Title | Link | Reward | Budget</code>\n\nExample:\n<code>My Channel | https://t.me/mychannel | 5 | 100</code>`,
+      `${type?.label ?? "📢 Promotion"}\n\nSend it in one line:\n<code>Title | Link | Reward | Budget</code>\n\nExample:\n<code>My Channel | https://t.me/mychannel | 5 | 100</code>`,
       { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "promo_menu" }]] } },
     );
     return;
@@ -1913,7 +1913,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       return;
     }
 
-    // In steps ke liye pehle wale screen ka data chahiye
+    // These steps need the data from the previous screen
     const current =
       (await getPendingInfo(supabase, chatId, "aud")) ??
       (await getPendingInfo(supabase, chatId, "botaud")) ??
@@ -1956,7 +1956,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     await send(
       chatId,
-      "⚙️ <b>Auto-task settings</b>\n\nAuto-repeat tasks jaldi aa rahe hain. Abhi aap manually campaign bana sakte hain.",
+      "⚙️ <b>Auto-task settings</b>\n\nAuto-repeat tasks are coming soon. For now you can create campaigns manually.",
       { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "promo_menu" }]] } },
     );
     return;
@@ -1974,7 +1974,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       (a: any) =>
         `${a.is_active ? "🟢" : "⚪️"} <b>${a.title}</b> · ${a.category}\n   Reward ${a.reward} ${COIN} • Left ${a.budget_left} ${COIN}`,
     );
-    await send(chatId, `📋 <b>My Tasks</b>\n\n${lines.length ? lines.join("\n") : "Abhi koi campaign nahi hai."}`, {
+    await send(chatId, `📋 <b>My Tasks</b>\n\n${lines.length ? lines.join("\n") : "No campaigns yet."}`, {
       reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "promo_menu" }]] },
     });
     return;
@@ -2054,7 +2054,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       .insert({ tg_id: chatId, amount: a.reward, reason: `Task: ${a.title}` });
     await tg("answerCallbackQuery", { callback_query_id: cb.id, text: `+${a.reward} ${COIN} 🎉` });
 
-    // Promoted post ko bot chat mein bhejein (forward)
+    // Forward the promoted post into the bot chat
     let delivered = false;
     let fromChat: string | number | null = a.src_chat ?? null;
     let fromMsg: number | null = a.src_msg ?? null;
@@ -2089,7 +2089,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       });
     }
 
-    // 5 second baad reward + Next Post / Report / Back
+    // After 5 seconds: reward + Next Post / Report / Back
     await new Promise((r) => setTimeout(r, 5000));
 
     const newBalance = ((u as any)?.balance ?? 0) + a.reward;
@@ -2119,7 +2119,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       .maybeSingle();
 
     if (!ad || !(ad as any).is_active || (ad as any).budget_left < (ad as any).reward) {
-      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Ye task ab available nahi hai." });
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "This task is no longer available." });
       return;
     }
 
@@ -2183,7 +2183,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
 
     const { error } = await supabase.from("cg_completions").insert({ ad_id: adId, tg_id: chatId });
     if (error) {
-      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Ye task pehle hi complete ho chuka hai." });
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "You have already completed this task." });
       return;
     }
 
