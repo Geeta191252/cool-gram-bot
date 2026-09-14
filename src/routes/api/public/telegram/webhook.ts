@@ -2734,6 +2734,16 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         if (!safeEqual(actual, expected)) return new Response("Unauthorized", { status: 401 });
 
         const update = await request.json();
+
+        // Ignore update kinds we never act on (chat_member floods from big channels, etc.)
+        const handled =
+          update.pre_checkout_query ||
+          update.callback_query ||
+          update.my_chat_member ||
+          update.message ||
+          update.edited_message;
+        if (!handled) return Response.json({ ok: true, ignored: true });
+
         const supabase = db();
 
         const settingsPromise = loadSettings(supabase);
@@ -2744,6 +2754,7 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
             .insert({ update_id: update.update_id });
           if (error) return Response.json({ ok: true, duplicate: true });
         }
+
 
         try {
           await settingsPromise;
