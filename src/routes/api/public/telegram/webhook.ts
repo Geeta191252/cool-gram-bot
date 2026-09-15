@@ -2064,11 +2064,8 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await showBotPromoInfo(supabase, chatId);
       return;
     }
-    if (key === "webapp") {
-      await showBotPromoInfo(supabase, chatId, true);
-      return;
-    }
     if (key === "reactions") {
+
       await askReactionLink(supabase, chatId);
       return;
     }
@@ -2143,13 +2140,22 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await showPromoteMenu(supabase, chatId);
       return;
     }
-    const isCond = data.split(":")[1] !== "start";
+    const kind = data.split(":")[1];
+    if (kind === "webapp") {
+      info.webapp = true;
+      info.task_type = "Bot with mini app";
+      await showBotAudience(supabase, chatId, info);
+      return;
+    }
+    const isCond = kind !== "start";
+    info.webapp = false;
     info.task_type = isCond ? "With additional conditions" : "Bot start only";
     if (isCond) {
       await askBotConditions(supabase, chatId, info);
     } else {
       await showBotAudience(supabase, chatId, info);
     }
+
     return;
   }
 
