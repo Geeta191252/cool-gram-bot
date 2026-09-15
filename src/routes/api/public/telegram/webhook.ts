@@ -2156,15 +2156,35 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       return;
     }
     const kind = data.split(":")[1];
+    const hasApp = await botHasMiniApp(info.link);
     if (kind === "webapp") {
+      if (hasApp === false) {
+        await tg("sendMessage", {
+          chat_id: chatId,
+          text: "📱 <b>This bot has no Mini App.</b>\n\nOnly Mini App bots can be promoted here. Please pick another task type, or go back and select a Mini App bot.",
+          parse_mode: "HTML",
+        });
+        await showBotTaskType(supabase, chatId, info);
+        return;
+      }
       info.webapp = true;
       info.task_type = "Bot with mini app";
       await showBotAudience(supabase, chatId, info);
       return;
     }
+    if (hasApp === true) {
+      await tg("sendMessage", {
+        chat_id: chatId,
+        text: "🤖 <b>This bot has a Mini App.</b>\n\nMini App bots must be promoted with the <b>📱 Bot with mini app</b> task type.",
+        parse_mode: "HTML",
+      });
+      await showBotTaskType(supabase, chatId, info);
+      return;
+    }
     const isCond = kind !== "start";
     info.webapp = false;
     info.task_type = isCond ? "With additional conditions" : "Bot start only";
+
     if (isCond) {
       await askBotConditions(supabase, chatId, info);
     } else {
