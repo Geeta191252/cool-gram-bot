@@ -412,10 +412,11 @@ const BOT_SUBTYPES: { key: string; label: string; title: string; desc: string }[
   },
   {
     key: "webapp",
-    label: "📱 Bots with Web App",
-    title: "📱 Web App bots",
+    label: "📱 Bots with Mini App",
+    title: "📱 Mini App bots",
     desc: "Open a mini app in Telegram.",
   },
+
   {
     key: "cond",
     label: "🤖 With additional conditions",
@@ -746,7 +747,7 @@ const PROMO_TYPES = [
   { key: "groups", label: "👥 Group" },
   { key: "views", label: "👁 Post" },
   { key: "bots", label: "🤖 Bot" },
-  { key: "webapp", label: "📱 Bot with web app" },
+  { key: "boost", label: "⚡ Premium boost (channel)" },
   { key: "boost", label: "⚡ Premium boost (channel)" },
   { key: "reactions", label: "💙 Reactions" },
 ];
