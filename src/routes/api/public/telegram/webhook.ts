@@ -1022,30 +1022,27 @@ async function askBotRefLink(supabase: ReturnType<typeof db>, chatId: number, in
 }
 
 async function showBotTaskType(supabase: ReturnType<typeof db>, chatId: number, info: any) {
-  if (info.webapp) {
-    info.task_type = "Bot with web app";
-    await showBotAudience(supabase, chatId, info);
-    return;
-  }
+  info.webapp = false;
   await setPending(supabase, chatId, "bottype", info);
   await tg("sendMessage", {
     chat_id: chatId,
     text:
       "🤖 <b>Choose the task type:</b>\n\n" +
       "▶️ <b>Bot start only</b> — the worker opens the bot and presses Start (+ completes a captcha or selects a language, if prompted). No other actions.\n\n" +
+      "📱 <b>Bot with mini app</b> — the worker opens your bot and launches the Telegram Mini App. Only mini app bots.\n\n" +
       "📝 <b>With additional conditions</b> — you can request additional actions. For example, subscribing to sponsors or completing a simple action.",
     parse_mode: "HTML",
     reply_markup: {
       inline_keyboard: [
-        [
-          { text: "▶️ Bot start only", callback_data: "bottype:start" },
-          { text: "📝 With additional conditions", callback_data: "bottype:cond" },
-        ],
+        [{ text: "▶️ Bot start only", callback_data: "bottype:start" }],
+        [{ text: "📱 Bot with mini app", callback_data: "bottype:webapp" }],
+        [{ text: "📝 With additional conditions", callback_data: "bottype:cond" }],
         [{ text: "⬅️ Back", callback_data: "back:botref" }],
       ],
     },
   });
 }
+
 
 async function askBotConditions(supabase: ReturnType<typeof db>, chatId: number, info: any) {
   await setPending(supabase, chatId, "botcond", info);
