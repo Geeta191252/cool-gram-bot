@@ -748,7 +748,7 @@ const PROMO_TYPES = [
   { key: "views", label: "👁 Post" },
   { key: "bots", label: "🤖 Bot" },
   { key: "boost", label: "⚡ Premium boost (channel)" },
-  { key: "boost", label: "⚡ Premium boost (channel)" },
+
   { key: "reactions", label: "💙 Reactions" },
 ];
 
