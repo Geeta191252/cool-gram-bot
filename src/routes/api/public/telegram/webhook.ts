@@ -412,10 +412,11 @@ const BOT_SUBTYPES: { key: string; label: string; title: string; desc: string }[
   },
   {
     key: "webapp",
-    label: "📱 Bots with Web App",
-    title: "📱 Web App bots",
+    label: "📱 Bots with Mini App",
+    title: "📱 Mini App bots",
     desc: "Open a mini app in Telegram.",
   },
+
   {
     key: "cond",
     label: "🤖 With additional conditions",
@@ -746,8 +747,8 @@ const PROMO_TYPES = [
   { key: "groups", label: "👥 Group" },
   { key: "views", label: "👁 Post" },
   { key: "bots", label: "🤖 Bot" },
-  { key: "webapp", label: "📱 Bot with web app" },
   { key: "boost", label: "⚡ Premium boost (channel)" },
+
   { key: "reactions", label: "💙 Reactions" },
 ];
 
@@ -1021,30 +1022,27 @@ async function askBotRefLink(supabase: ReturnType<typeof db>, chatId: number, in
 }
 
 async function showBotTaskType(supabase: ReturnType<typeof db>, chatId: number, info: any) {
-  if (info.webapp) {
-    info.task_type = "Bot with web app";
-    await showBotAudience(supabase, chatId, info);
-    return;
-  }
+  info.webapp = false;
   await setPending(supabase, chatId, "bottype", info);
   await tg("sendMessage", {
     chat_id: chatId,
     text:
       "🤖 <b>Choose the task type:</b>\n\n" +
       "▶️ <b>Bot start only</b> — the worker opens the bot and presses Start (+ completes a captcha or selects a language, if prompted). No other actions.\n\n" +
+      "📱 <b>Bot with mini app</b> — the worker opens your bot and launches the Telegram Mini App. Only mini app bots.\n\n" +
       "📝 <b>With additional conditions</b> — you can request additional actions. For example, subscribing to sponsors or completing a simple action.",
     parse_mode: "HTML",
     reply_markup: {
       inline_keyboard: [
-        [
-          { text: "▶️ Bot start only", callback_data: "bottype:start" },
-          { text: "📝 With additional conditions", callback_data: "bottype:cond" },
-        ],
+        [{ text: "▶️ Bot start only", callback_data: "bottype:start" }],
+        [{ text: "📱 Bot with mini app", callback_data: "bottype:webapp" }],
+        [{ text: "📝 With additional conditions", callback_data: "bottype:cond" }],
         [{ text: "⬅️ Back", callback_data: "back:botref" }],
       ],
     },
   });
 }
+
 
 async function askBotConditions(supabase: ReturnType<typeof db>, chatId: number, info: any) {
   await setPending(supabase, chatId, "botcond", info);
@@ -1081,7 +1079,7 @@ async function showBotAudience(supabase: ReturnType<typeof db>, chatId: number, 
       inline_keyboard: [
         [{ text: "1️⃣ All users", callback_data: "botaud:all" }],
         [{ text: "2️⃣ Telegram Premium only", callback_data: "botaud:premium" }],
-        [{ text: "⬅️ Back", callback_data: cond ? "back:botcond" : info.webapp ? "back:botref" : "back:bottype" }],
+        [{ text: "⬅️ Back", callback_data: cond ? "back:botcond" : "back:bottype" }],
       ],
     },
   });
@@ -2066,11 +2064,8 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await showBotPromoInfo(supabase, chatId);
       return;
     }
-    if (key === "webapp") {
-      await showBotPromoInfo(supabase, chatId, true);
-      return;
-    }
     if (key === "reactions") {
+
       await askReactionLink(supabase, chatId);
       return;
     }
@@ -2145,13 +2140,22 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await showPromoteMenu(supabase, chatId);
       return;
     }
-    const isCond = data.split(":")[1] !== "start";
+    const kind = data.split(":")[1];
+    if (kind === "webapp") {
+      info.webapp = true;
+      info.task_type = "Bot with mini app";
+      await showBotAudience(supabase, chatId, info);
+      return;
+    }
+    const isCond = kind !== "start";
+    info.webapp = false;
     info.task_type = isCond ? "With additional conditions" : "Bot start only";
     if (isCond) {
       await askBotConditions(supabase, chatId, info);
     } else {
       await showBotAudience(supabase, chatId, info);
     }
+
     return;
   }
 
