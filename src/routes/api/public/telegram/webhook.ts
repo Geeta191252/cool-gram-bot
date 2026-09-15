@@ -91,6 +91,21 @@ async function tgRaw(method: string, payload: unknown) {
   }
 }
 
+// Returns true / false when Telegram can tell us, null when it cannot.
+async function botHasMiniApp(link: string | undefined): Promise<boolean | null> {
+  const uname = String(link ?? "")
+    .replace(/^https?:\/\/t\.me\//i, "")
+    .replace(/^@/, "")
+    .split(/[/?\s]/)[0];
+  if (!uname) return null;
+  const res = await tgRaw("getChat", { chat_id: `@${uname}` });
+  if (!res?.ok) return null;
+  const info = res.result ?? {};
+  if (typeof info.has_main_web_app === "boolean") return info.has_main_web_app;
+  return null;
+}
+
+
 function parsePostLink(link: string | null): { chat: string | number; msg: number } | null {
   if (!link) return null;
   const priv = link.match(/t\.me\/c\/(\d+)\/(\d+)/);
