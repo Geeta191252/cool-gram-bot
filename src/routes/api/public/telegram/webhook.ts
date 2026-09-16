@@ -758,20 +758,13 @@ async function showTask(
 
 
   // For join tasks, hide chats the user is already a member of
-  if (category === "channels" || category === "groups") {
-    const candidates = ads.slice(0, 20);
-    const checks = await Promise.all(
-      candidates.map(async (a) => {
-        const ref = chatRefFromAd(a);
-        if (!ref) return false;
-        const res: any = await tg("getChatMember", { chat_id: ref, user_id: chatId });
-        const st = res?.result?.status;
-        return res?.ok === true && ["member", "administrator", "creator", "restricted"].includes(st);
-      }),
+  if (category === "channels" || category === "groups" || category === "boost") {
+    ads = await dropJoinedAds(
+      ads.map((a) => ({ ...a, category })),
+      chatId,
     );
-    const joined = new Set(candidates.filter((_, i) => checks[i]).map((a) => String(a.id)));
-    if (joined.size) ads = ads.filter((a) => !joined.has(String(a.id)));
   }
+
 
 
   if (!ads.length) {
