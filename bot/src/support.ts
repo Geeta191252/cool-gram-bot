@@ -1,6 +1,7 @@
 import { getDb } from "./mongo.js";
 
 const TOKEN = process.env["SUPPORT_BOT_TOKEN"] ?? "";
+const MAIN_BOT_TOKEN = process.env["TELEGRAM_BOT_TOKEN"] ?? process.env["COOLGRAM_BOT_TOKEN"] ?? "";
 const OWNER_TG = Number(process.env["SUPPORT_OWNER_TG"] ?? process.env["OWNER_TG"] ?? 6965488457);
 
 export const SUPPORT_WEBHOOK_PATH = process.env["SUPPORT_WEBHOOK_PATH"] ?? "/support/webhook";
@@ -12,9 +13,13 @@ const SPONSOR_CHANNEL = "@CoolGramAdvertise";
 const SPONSOR_LINK = "https://t.me/CoolGramAdvertise";
 
 async function tg(method: string, payload: Record<string, unknown>) {
-  if (!TOKEN) return null;
+  return tgWithToken(TOKEN, method, payload);
+}
+
+async function tgWithToken(token: string, method: string, payload: Record<string, unknown>) {
+  if (!token) return null;
   try {
-    const res = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}`, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
@@ -46,13 +51,21 @@ function displayName(from: any) {
 }
 
 async function isSponsorMember(userId: number): Promise<boolean> {
-  try {
-    const res: any = await tg("getChatMember", { chat_id: SPONSOR_CHANNEL, user_id: userId });
+  const verifierTokens = [...new Set([MAIN_BOT_TOKEN, TOKEN].filter(Boolean))];
+  for (const token of verifierTokens) {
+    const res: any = await tgWithToken(token, "getChatMember", {
+      chat_id: SPONSOR_CHANNEL,
+      user_id: userId,
+    });
     const status = res?.result?.status;
-    return Boolean(res?.ok && ["member", "administrator", "creator", "restricted"].includes(status));
-  } catch {
-    return false;
+    const isMember =
+      status === "member" ||
+      status === "administrator" ||
+      status === "creator" ||
+      (status === "restricted" && res?.result?.is_member === true);
+    if (res?.ok && isMember) return true;
   }
+  return false;
 }
 
 async function sponsorPrompt(chatId: number) {
