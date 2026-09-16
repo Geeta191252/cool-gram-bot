@@ -295,7 +295,7 @@ async function pauseUnverifiableAd(_supabase: any, ad: any, cbId: string) {
             [
               {
                 text: "🛡 Add bot as admin",
-                url: `https://t.me/${bot}?${isChannel ? "startchannel" : "startgroup"}&admin=invite_users+manage_chat${isChannel ? "+post_messages" : ""}`,
+                url: `https://t.me/${bot}?${isChannel ? "startchannel" : "startgroup"}&admin=${adminDeepLinkRights(isChannel)}`,
               },
             ],
           ],
