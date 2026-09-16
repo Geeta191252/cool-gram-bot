@@ -386,11 +386,15 @@ async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
     .eq("is_active", true)
     .neq("owner_tg", chatId);
   const f = await taskFilters(supabase, chatId);
+  const available = await dropJoinedAds(
+    ((ads ?? []) as any[]).filter((a) => f.isAvailable(a)),
+    chatId,
+  );
   const counts: Record<string, number> = {};
-  for (const a of (ads ?? []) as any[]) {
-    if (!f.isAvailable(a)) continue;
+  for (const a of available) {
     counts[a.category] = (counts[a.category] ?? 0) + 1;
   }
+
 
 
   const rows: any[] = [];
@@ -450,6 +454,26 @@ async function taskFilters(supabase: ReturnType<typeof db>, chatId: number) {
     },
   };
 }
+
+// Hide join tasks for chats the user is already a member of (even from long ago).
+async function dropJoinedAds(ads: any[], chatId: number) {
+  const joinKinds = new Set(["channels", "groups", "boost"]);
+  const targets = ads.filter((a) => joinKinds.has(String(a.category ?? ""))).slice(0, 40);
+  if (!targets.length) return ads;
+  const checks = await Promise.all(
+    targets.map(async (a) => {
+      const ref = chatRefFromAd(a);
+      if (!ref) return false;
+      const res: any = await tg("getChatMember", { chat_id: ref, user_id: chatId });
+      const st = res?.result?.status;
+      return res?.ok === true && ["member", "administrator", "creator", "restricted"].includes(st);
+    }),
+  );
+  const joined = new Set(targets.filter((_, i) => checks[i]).map((a) => String(a.id)));
+  return joined.size ? ads.filter((a) => !joined.has(String(a.id))) : ads;
+}
+
+
 
 
 function actionVerb(category?: string) {
@@ -731,20 +755,13 @@ async function showTask(
 
 
   // For join tasks, hide chats the user is already a member of
-  if (category === "channels" || category === "groups") {
-    const candidates = ads.slice(0, 20);
-    const checks = await Promise.all(
-      candidates.map(async (a) => {
-        const ref = chatRefFromAd(a);
-        if (!ref) return false;
-        const res: any = await tg("getChatMember", { chat_id: ref, user_id: chatId });
-        const st = res?.result?.status;
-        return res?.ok === true && ["member", "administrator", "creator", "restricted"].includes(st);
-      }),
+  if (category === "channels" || category === "groups" || category === "boost") {
+    ads = await dropJoinedAds(
+      ads.map((a) => ({ ...a, category })),
+      chatId,
     );
-    const joined = new Set(candidates.filter((_, i) => checks[i]).map((a) => String(a.id)));
-    if (joined.size) ads = ads.filter((a) => !joined.has(String(a.id)));
   }
+
 
 
   if (!ads.length) {
