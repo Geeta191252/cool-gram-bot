@@ -30,14 +30,21 @@ const OWNER_USERNAME = "Hidden_Xman";
 const SPONSOR_CHANNEL = "@CoolGramAdvertise";
 const SPONSOR_LINK = "https://t.me/CoolGramAdvertise";
 
-async function isSponsorMember(userId: number): Promise<boolean> {
+const sponsorCache = new Map<number, { ok: boolean; at: number }>();
+const SPONSOR_TTL = 10 * 60 * 1000;
+
+async function isSponsorMember(userId: number, force = false): Promise<boolean> {
+  const hit = sponsorCache.get(userId);
+  if (!force && hit && Date.now() - hit.at < SPONSOR_TTL) return hit.ok;
   const res = await tg("getChatMember", { chat_id: SPONSOR_CHANNEL, user_id: userId });
   // If the bot cannot read the channel (not an admin there), do not block anyone.
   if (!res?.ok) return true;
   const status = res.result?.status;
-  if (status === "left" || status === "kicked") return false;
-  return true;
+  const ok = !(status === "left" || status === "kicked");
+  sponsorCache.set(userId, { ok, at: Date.now() });
+  return ok;
 }
+
 
 
 function sponsorPrompt() {
@@ -552,17 +559,30 @@ async function taskFilters(supabase: ReturnType<typeof db>, chatId: number) {
 }
 
 // Hide join tasks for chats the user is already a member of (even from long ago).
+const memberCache = new Map<string, { joined: boolean; at: number }>();
+const MEMBER_TTL = 5 * 60 * 1000;
+
+async function isChatMemberCached(ref: string, userId: number) {
+  const key = `${userId}:${ref}`;
+  const hit = memberCache.get(key);
+  if (hit && Date.now() - hit.at < MEMBER_TTL) return hit.joined;
+  const res: any = await tg("getChatMember", { chat_id: ref, user_id: userId });
+  const st = res?.result?.status;
+  const joined =
+    res?.ok === true && ["member", "administrator", "creator", "restricted"].includes(st);
+  if (res?.ok === true) memberCache.set(key, { joined, at: Date.now() });
+  return joined;
+}
+
 async function dropJoinedAds(ads: any[], chatId: number) {
   const joinKinds = new Set(["channels", "groups", "boost"]);
-  const targets = ads.filter((a) => joinKinds.has(String(a.category ?? ""))).slice(0, 40);
+  const targets = ads.filter((a) => joinKinds.has(String(a.category ?? ""))).slice(0, 20);
   if (!targets.length) return ads;
   const checks = await Promise.all(
     targets.map(async (a) => {
       const ref = chatRefFromAd(a);
       if (!ref) return false;
-      const res: any = await tg("getChatMember", { chat_id: ref, user_id: chatId });
-      const st = res?.result?.status;
-      return res?.ok === true && ["member", "administrator", "creator", "restricted"].includes(st);
+      return isChatMemberCached(String(ref), chatId);
     }),
   );
   const joined = new Set(targets.filter((_, i) => checks[i]).map((a) => String(a.id)));
@@ -1000,13 +1020,12 @@ async function askChatPicker(
               chat_is_channel: isChannel,
               request_title: true,
               request_username: true,
-              user_administrator_rights: {
+              // Keep the filter minimal, otherwise Telegram shows an empty list.
+              bot_administrator_rights: {
                 is_anonymous: false,
                 can_manage_chat: true,
                 can_invite_users: true,
-                ...(isChannel ? { can_post_messages: true } : {}),
               },
-              bot_administrator_rights: fullBotRights(isChannel),
             },
           },
         ],
@@ -2552,7 +2571,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
   const fromId = Number(cb.from?.id ?? chatId);
 
   if (data === "chkjoin") {
-    if (await isSponsorMember(fromId)) {
+    if (await isSponsorMember(fromId, true)) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "✅ Verified!" });
       await send(chatId, "✅ Thanks for joining! You can use Cool Gram now.", {
         reply_markup: MAIN_KEYBOARD,
