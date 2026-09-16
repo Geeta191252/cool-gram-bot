@@ -3579,7 +3579,16 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
                 .maybeSingle();
               pending = ((u as any)?.pending_action as string | null) ?? null;
             }
-            if (chatId && usersShared) await handleUsersShared(supabase, chatId, usersShared);
+            if (
+              chatId &&
+              pending === "bcast" &&
+              isOwner(Number(chatId)) &&
+              !String(text ?? "").startsWith("/")
+            ) {
+              await runBroadcast(supabase, Number(chatId), {
+                copyFrom: { chat_id: Number(chatId), message_id: Number(message.message_id) },
+              });
+            } else if (chatId && usersShared) await handleUsersShared(supabase, chatId, usersShared);
             else if (chatId && shared) await handleChatShared(supabase, chatId, shared);
             else if (chatId && photo && pending?.startsWith("proof:"))
               await handleProofPhoto(supabase, chatId, message, pending.slice(6));
