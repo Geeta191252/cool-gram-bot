@@ -4,8 +4,9 @@ import { createHash, timingSafeEqual } from "crypto";
 const COIN = "CG";
 const INTRO_VIDEO_URL =
   "https://project--df5c0224-0a9b-491a-a8d1-60dc4387ca37-dev.lovable.app/__l5e/assets-v1/44cc983b-29b2-4358-a478-976fbd96ea23/coolgram-intro-v2.mp4";
-const SIGNUP_BONUS = 25;
-const REFERRAL_BONUS = 50;
+const SIGNUP_BONUS_DEF = 25;
+const REFERRAL_BONUS_DEF = 600;
+
 
 function deriveSecret(apiKey: string) {
   return createHash("sha256").update(`telegram-webhook:${apiKey}`).digest("base64url");
@@ -29,6 +30,7 @@ const SETTINGS: Record<string, { def: number; label: string }> = {
   min_channel: { def: 750, label: "Channel subscriber min price" },
   min_group: { def: 600, label: "Group join min price" },
   min_views: { def: 25, label: "Post view min price" },
+  min_reactions: { def: 25, label: "Reaction min price" },
   bot_all: { def: 900, label: "Bot start — all users min price" },
   bot_prem: { def: 1400, label: "Bot start — premium only min price" },
   bot_cond_all: { def: 3000, label: "Bot + conditions — all users min price" },
@@ -40,7 +42,42 @@ const SETTINGS: Record<string, { def: number; label: string }> = {
   commission_pct: { def: 15, label: "Task creation commission (%)" },
   star_rate: { def: 1900, label: `${COIN} credited per 1 Telegram Star` },
   min_withdraw: { def: 50000, label: "Minimum withdrawal amount" },
+  referral_bonus: { def: REFERRAL_BONUS_DEF, label: "Referral bonus per invited user" },
+  signup_bonus: { def: SIGNUP_BONUS_DEF, label: "Welcome bonus for a new user" },
 };
+
+// Friendly aliases so prices can be set with simple words.
+const SETTING_ALIASES: Record<string, string> = {
+  channel: "min_channel",
+  channels: "min_channel",
+  group: "min_group",
+  groups: "min_group",
+  view: "min_views",
+  views: "min_views",
+  post: "min_views",
+  posts: "min_views",
+  reaction: "min_reactions",
+  reactions: "min_reactions",
+  bot: "bot_all",
+  bots: "bot_all",
+  bot_premium: "bot_prem",
+  boost: "boost_7",
+  referral: "referral_bonus",
+  refer: "referral_bonus",
+  signup: "signup_bonus",
+  welcome: "signup_bonus",
+  commission: "commission_pct",
+  stars: "star_rate",
+  withdraw: "min_withdraw",
+};
+
+function settingKey(raw: string): string | null {
+  const k = (raw ?? "").trim().toLowerCase();
+  if (SETTINGS[k]) return k;
+  const alias = SETTING_ALIASES[k];
+  return alias && SETTINGS[alias] ? alias : null;
+}
+
 
 let settingsMap: Record<string, number> = {};
 let settingsLoadedAt = 0;
@@ -334,7 +371,7 @@ async function getUser(supabase: ReturnType<typeof db>, from: any, startPayload?
       tg_id: from.id,
       username: from.username ?? null,
       first_name: from.first_name ?? null,
-      balance: SIGNUP_BONUS,
+      balance: cfg("signup_bonus"),
       referred_by: referrer,
     })
     .select("tg_id, balance, referral_count, pending_action")
@@ -342,7 +379,7 @@ async function getUser(supabase: ReturnType<typeof db>, from: any, startPayload?
 
   await supabase.from("cg_transactions").insert({
     tg_id: from.id,
-    amount: SIGNUP_BONUS,
+    amount: cfg("signup_bonus"),
     reason: "Welcome bonus",
   });
 
@@ -356,14 +393,14 @@ async function getUser(supabase: ReturnType<typeof db>, from: any, startPayload?
       await supabase
         .from("cg_users")
         .update({
-          balance: (refUser as any).balance + REFERRAL_BONUS,
+          balance: (refUser as any).balance + cfg("referral_bonus"),
           referral_count: (refUser as any).referral_count + 1,
         })
         .eq("tg_id", referrer);
       await supabase
         .from("cg_transactions")
-        .insert({ tg_id: referrer, amount: REFERRAL_BONUS, reason: "Referral bonus" });
-      await send(referrer, `🎉 New referral joined! +${REFERRAL_BONUS} ${COIN} added to your balance.`);
+        .insert({ tg_id: referrer, amount: cfg("referral_bonus"), reason: "Referral bonus" });
+      await send(referrer, `🎉 New referral joined! +${cfg("referral_bonus")} ${COIN} added to your balance.`);
     }
   }
 
@@ -1626,13 +1663,29 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `👥 Users: <b>${users.count ?? 0}</b>\n📢 Active campaigns: <b>${ads.count ?? 0}</b>\n⭐ Stars received: <b>${totalStars}</b>\n\n` +
       `<b>Current prices &amp; settings</b>\n${lines.join("\n")}\n\n` +
       `<b>Commands</b>\n` +
+      `<code>/prices</code> — full price list with short names\n` +
       `<code>/setprice &lt;key&gt; &lt;value&gt;</code> — change any setting\n` +
-      `<code>/resetprice &lt;key&gt;</code> — back to default\n` +
+      `<code>/resetprice &lt;key&gt;</code> — back to default (<code>all</code> resets everything)\n` +
       `<code>/addbalance &lt;tg_id&gt; &lt;amount&gt;</code> — add ${COIN} to a user\n` +
       `<code>/takebalance &lt;tg_id&gt; &lt;amount&gt;</code> — remove ${COIN}\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
-      `<code>/deposits</code> — last Stars deposits`,
+      `<code>/deposits</code> — last Stars deposits\n\n` +
+      `Examples:\n<code>/setprice channel 800</code>\n<code>/setprice group 600</code>\n<code>/setprice views 30</code>\n<code>/setprice bot 900</code>\n<code>/setprice reactions 25</code>\n<code>/setprice referral 600</code>`,
   );
+}
+
+function priceListText() {
+  const aliasOf: Record<string, string[]> = {};
+  for (const [alias, key] of Object.entries(SETTING_ALIASES)) {
+    (aliasOf[key] ||= []).push(alias);
+  }
+  const lines = Object.entries(SETTINGS).map(([key, s]) => {
+    const cur = cfg(key);
+    const short = aliasOf[key]?.length ? ` (short: ${aliasOf[key]!.map((a) => `<code>${a}</code>`).join(", ")})` : "";
+    const changed = cur !== s.def ? ` — default ${s.def.toLocaleString("en-US")}` : "";
+    return `• ${s.label}\n  <code>${key}</code>${short}\n  Now: <b>${cur.toLocaleString("en-US")}</b>${changed}`;
+  });
+  return `💲 <b>Prices &amp; settings</b>\n\n${lines.join("\n\n")}\n\nChange: <code>/setprice &lt;key&gt; &lt;value&gt;</code>\nReset: <code>/resetprice &lt;key&gt;</code> or <code>/resetprice all</code>`;
 }
 
 async function handleAdminCommand(
@@ -1649,15 +1702,20 @@ async function handleAdminCommand(
     return true;
   }
 
+  if (cmd === "/prices" || cmd === "/price") {
+    await send(chatId, priceListText());
+    return true;
+  }
+
   if (cmd === "/setprice") {
-    const key = args[0] ?? "";
-    const value = Number(args[1]);
-    if (!SETTINGS[key] || !Number.isFinite(value) || value < 0) {
+    const key = settingKey(args[0] ?? "");
+    const value = Number(String(args[1] ?? "").replace(/[, _]/g, ""));
+    if (!key || !Number.isFinite(value) || value < 0) {
       await send(
         chatId,
-        `⚠️ Use: <code>/setprice &lt;key&gt; &lt;value&gt;</code>\nKeys: ${Object.keys(SETTINGS)
-          .map((k) => `<code>${k}</code>`)
-          .join(", ")}`,
+        `⚠️ Use: <code>/setprice &lt;key&gt; &lt;value&gt;</code>\n` +
+          `Examples: <code>/setprice channel 800</code>, <code>/setprice referral 600</code>\n\n` +
+          `Send <code>/prices</code> to see every key.`,
       );
       return true;
     }
@@ -1665,22 +1723,35 @@ async function handleAdminCommand(
     settingsMap[key] = value;
     await send(
       chatId,
-      `✅ <b>${SETTINGS[key]!.label}</b> updated to <b>${value.toLocaleString("en-US")}</b>.`,
+      `✅ <b>${SETTINGS[key]!.label}</b> updated to <b>${value.toLocaleString("en-US")}</b>.\nKey: <code>${key}</code>`,
     );
     return true;
   }
 
   if (cmd === "/resetprice") {
-    const key = args[0] ?? "";
-    if (!SETTINGS[key]) {
-      await send(chatId, "⚠️ Unknown key. Open /admin to see all keys.");
+    const raw = (args[0] ?? "").toLowerCase();
+    if (raw === "all") {
+      for (const key of Object.keys(SETTINGS)) {
+        await supabase.from("cg_settings").delete().eq("key", key);
+        delete settingsMap[key];
+      }
+      await send(chatId, "♻️ All prices reset to their defaults.");
+      return true;
+    }
+    const key = settingKey(raw);
+    if (!key) {
+      await send(chatId, "⚠️ Unknown key. Send <code>/prices</code> to see all keys.");
       return true;
     }
     await supabase.from("cg_settings").delete().eq("key", key);
     delete settingsMap[key];
-    await send(chatId, `♻️ <b>${SETTINGS[key]!.label}</b> reset to default <b>${SETTINGS[key]!.def}</b>.`);
+    await send(
+      chatId,
+      `♻️ <b>${SETTINGS[key]!.label}</b> reset to default <b>${SETTINGS[key]!.def.toLocaleString("en-US")}</b>.`,
+    );
     return true;
   }
+
 
   if (cmd === "/addbalance" || cmd === "/takebalance") {
     const target = Number(args[0]);
@@ -2059,6 +2130,12 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       await send(chatId, "⚠️ Send it like this: <code>Reward | Budget</code>\nExample: <code>5 | 100</code>");
       return;
     }
+    const minReward = info.category === "reactions" ? cfg("min_reactions") : 1;
+    if (reward < minReward) {
+      await send(chatId, `⚠️ Minimum reward for this task type is <b>${minReward} ${COIN}</b>.`);
+      return;
+    }
+
     if (user.balance < budget) {
       await send(chatId, `❌ Insufficient balance. You have <b>${user.balance} ${COIN}</b>.`);
       return;
@@ -2120,7 +2197,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
 
   if (text.startsWith("/start")) {
     const caption = `👋 <b>${from.first_name ?? "friend"}, welcome to COOL GRAM!</b>\n\nThe Telegram promotion platform${
-      isNew ? `\n\n🎁 Welcome bonus: <b>+${SIGNUP_BONUS} ${COIN}</b>` : ""
+      isNew ? `\n\n🎁 Welcome bonus: <b>+${cfg("signup_bonus")} ${COIN}</b>` : ""
     }`;
     const video = await tg("sendVideo", {
       chat_id: chatId,
@@ -2165,7 +2242,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       );
       await send(
         chatId,
-        `👛 <b>Wallet</b>\n\nID: <code>${chatId}</code>\nBalance: <b>${user.balance} ${COIN}</b>\nReferrals: <b>${user.referral_count}</b>\n\n🔗 Your invite link:\nhttps://t.me/${bot}?start=ref_${chatId}\nYou get <b>+${REFERRAL_BONUS} ${COIN}</b> per invite.\n\n🧾 <b>Last activity</b>\n${lines.length ? lines.join("\n") : "No activity yet."}`,
+        `👛 <b>Wallet</b>\n\nID: <code>${chatId}</code>\nBalance: <b>${user.balance} ${COIN}</b>\nReferrals: <b>${user.referral_count}</b>\n\n🔗 Your invite link:\nhttps://t.me/${bot}?start=ref_${chatId}\nYou get <b>+${cfg("referral_bonus")} ${COIN}</b> per invite.\n\n🧾 <b>Last activity</b>\n${lines.length ? lines.join("\n") : "No activity yet."}`,
         {
           reply_markup: {
             inline_keyboard: [[{ text: "⭐ Deposit with Telegram Stars", callback_data: "dep_menu" }]],
@@ -2195,7 +2272,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     case "ℹ️ Instruction":
       await send(
         chatId,
-        `ℹ️ <b>How COOL GRAM works</b>\n\n1️⃣ <b>Earnings</b> — open a task, join the channel, tap "I did it" and get ${COIN}.\n2️⃣ <b>Promote</b> — spend your ${COIN} to promote your own channel.\n3️⃣ <b>Wallet</b> — balance, history and referral link.\n4️⃣ Invite friends and earn ${REFERRAL_BONUS} ${COIN} per invite.`,
+        `ℹ️ <b>How COOL GRAM works</b>\n\n1️⃣ <b>Earnings</b> — open a task, join the channel, tap "I did it" and get ${COIN}.\n2️⃣ <b>Promote</b> — spend your ${COIN} to promote your own channel.\n3️⃣ <b>Wallet</b> — balance, history and referral link.\n4️⃣ Invite friends and earn ${cfg("referral_bonus")} ${COIN} per invite.`,
       );
       return;
     default:
