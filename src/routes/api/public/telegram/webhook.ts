@@ -295,7 +295,7 @@ async function pauseUnverifiableAd(_supabase: any, ad: any, cbId: string) {
             [
               {
                 text: "🛡 Add bot as admin",
-                url: `https://t.me/${bot}?${isChannel ? "startchannel" : "startgroup"}&admin=invite_users+manage_chat${isChannel ? "+post_messages" : ""}`,
+                url: `https://t.me/${bot}?${isChannel ? "startchannel" : "startgroup"}&admin=${adminDeepLinkRights(isChannel)}`,
               },
             ],
           ],
@@ -1002,12 +1002,7 @@ async function askChatPicker(
                 can_invite_users: true,
                 ...(isChannel ? { can_post_messages: true } : {}),
               },
-              bot_administrator_rights: {
-                is_anonymous: false,
-                can_manage_chat: true,
-                can_invite_users: true,
-                ...(isChannel ? { can_post_messages: true } : {}),
-              },
+              bot_administrator_rights: fullBotRights(isChannel),
             },
           },
         ],
@@ -1030,11 +1025,77 @@ async function askChatPicker(
   });
 }
 
+// Every admin right except the owner-only ones (promote members / anonymous).
+function fullBotRights(isChannel: boolean) {
+  return {
+    is_anonymous: false,
+    can_promote_members: false,
+    can_manage_chat: true,
+    can_change_info: true,
+    can_delete_messages: true,
+    can_invite_users: true,
+    can_restrict_members: true,
+    can_manage_video_chats: true,
+    can_post_stories: true,
+    can_edit_stories: true,
+    can_delete_stories: true,
+    ...(isChannel
+      ? { can_post_messages: true, can_edit_messages: true }
+      : { can_pin_messages: true, can_manage_topics: true }),
+  };
+}
+
+function adminDeepLinkRights(isChannel: boolean) {
+  const base = [
+    "manage_chat",
+    "change_info",
+    "delete_messages",
+    "invite_users",
+    "restrict_members",
+    "manage_video_chats",
+    "post_stories",
+    "edit_stories",
+    "delete_stories",
+  ];
+  const extra = isChannel
+    ? ["post_messages", "edit_messages"]
+    : ["pin_messages", "manage_topics"];
+  return [...base, ...extra].join("+");
+}
+
+async function recordBotChat(
+  supabase: ReturnType<typeof db>,
+  chat: any,
+  status: string,
+  addedBy?: number | null,
+) {
+  if (!chat?.id) return;
+  const active = ["administrator", "creator"].includes(status);
+  if (active) {
+    await supabase.from("cg_bot_chats").upsert(
+      {
+        chat_id: Number(chat.id),
+        title: chat.title ?? chat.username ?? String(chat.id),
+        username: chat.username ?? null,
+        type: chat.type ?? null,
+        status,
+        added_by: addedBy ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "chat_id" },
+    );
+  } else {
+    await supabase.from("cg_bot_chats").delete().eq("chat_id", Number(chat.id));
+  }
+}
+
 async function handleBotMembershipUpdate(supabase: ReturnType<typeof db>, membership: any) {
   const userId = Number(membership?.from?.id);
   const chat = membership?.chat;
   const status = String(membership?.new_chat_member?.status ?? "");
+  await recordBotChat(supabase, chat, status, userId || null);
   if (!userId || !chat?.id || !["administrator", "creator"].includes(status)) return;
+
 
   const { data: user } = await supabase
     .from("cg_users")
@@ -1332,7 +1393,7 @@ async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: numb
           [
             {
               text: "➕ Add bot to channel",
-              url: `https://t.me/${botUsername}?startchannel=true&admin=post_messages+edit_messages+invite_users`,
+              url: `https://t.me/${botUsername}?startchannel=true&admin=${adminDeepLinkRights(true)}`,
             },
           ],
         ],
@@ -1387,7 +1448,16 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
       else await askChatPicker(supabase, chatId, category, isCh);
       return;
     }
+    if (["administrator", "creator"].includes(String(st))) {
+      await recordBotChat(
+        supabase,
+        { id: shared.chat_id, title: shared.title, username: shared.username },
+        String(st),
+        chatId,
+      );
+    }
   }
+
 
 
   const title = shared.title ?? "My channel";
@@ -1727,7 +1797,9 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/deposits</code> — last Stars deposits\n` +
       `<code>/setprice withdraw &lt;amount&gt;</code> — minimum withdrawal\n` +
       `<code>/withdrawoff</code> / <code>/withdrawon</code> — close or open withdrawals\n` +
-      `<code>/withdrawstatus</code> — current withdrawal status\n\n` +
+      `<code>/withdrawstatus</code> — current withdrawal status\n` +
+      `<code>/chats</code> — every channel/group where the bot is admin\n` +
+      `<code>/broadcast</code> — send any message (text/photo/video) to all those chats\n\n` +
       `Examples:\n<code>/setprice channel 800</code>\n<code>/setprice group 600</code>\n<code>/setprice views 30</code>\n<code>/setprice bot 900</code>\n<code>/setprice premium 1400</code> — bot start, Premium-only audience\n<code>/setprice premium_cond 4000</code> — bot + conditions, Premium-only\n<code>/setprice reactions 25</code>\n<code>/setprice referral 600</code>`,
   );
 }
@@ -1746,6 +1818,46 @@ function priceListText() {
   return `💲 <b>Prices &amp; settings</b>\n\n${lines.join("\n\n")}\n\nChange: <code>/setprice &lt;key&gt; &lt;value&gt;</code>\nReset: <code>/resetprice &lt;key&gt;</code> or <code>/resetprice all</code>`;
 }
 
+async function runBroadcast(
+  supabase: ReturnType<typeof db>,
+  chatId: number,
+  payload: { text?: string; copyFrom?: { chat_id: number; message_id: number } },
+) {
+  await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+  const { data: chats } = await supabase.from("cg_bot_chats").select("chat_id,title");
+  const rows = (chats ?? []) as any[];
+  if (!rows.length) {
+    await send(chatId, "📭 The bot is not an admin in any chat yet, so there is nothing to broadcast to.");
+    return;
+  }
+  await send(chatId, `📡 Sending to <b>${rows.length}</b> chats…`);
+
+  let sent = 0;
+  const failed: string[] = [];
+  for (const c of rows) {
+    const res: any = payload.copyFrom
+      ? await tgRaw("copyMessage", {
+          chat_id: c.chat_id,
+          from_chat_id: payload.copyFrom.chat_id,
+          message_id: payload.copyFrom.message_id,
+        })
+      : await tgRaw("sendMessage", {
+          chat_id: c.chat_id,
+          text: payload.text,
+          parse_mode: "HTML",
+          disable_web_page_preview: false,
+        });
+    if (res?.ok) sent++;
+    else failed.push(String(c.title ?? c.chat_id));
+  }
+
+  await send(
+    chatId,
+    `📡 <b>Broadcast finished</b>\n\n✅ Sent: <b>${sent}</b>\n❌ Failed: <b>${failed.length}</b>` +
+      (failed.length ? `\n\nFailed chats:\n${failed.slice(0, 20).join("\n")}` : ""),
+  );
+}
+
 async function handleAdminCommand(
   supabase: ReturnType<typeof db>,
   chatId: number,
@@ -1762,6 +1874,48 @@ async function handleAdminCommand(
 
   if (cmd === "/prices" || cmd === "/price") {
     await send(chatId, priceListText());
+    return true;
+  }
+
+  if (cmd === "/chats") {
+    const { data: chats } = await supabase
+      .from("cg_bot_chats")
+      .select("chat_id,title,username,type,status,added_by")
+      .order("updated_at", { ascending: false })
+      .limit(200);
+    const rows = (chats ?? []) as any[];
+    if (!rows.length) {
+      await send(chatId, "📭 The bot is not an admin in any chat yet.");
+      return true;
+    }
+    const lines = rows.map((c, i) => {
+      const where = c.username ? `@${c.username}` : `<code>${c.chat_id}</code>`;
+      return `${i + 1}. <b>${c.title ?? c.chat_id}</b>\n   ${where} — ${c.type ?? "chat"} (${c.status})`;
+    });
+    await send(
+      chatId,
+      `🛡 <b>Chats where Cool Gram is admin</b> (${rows.length})\n\n${lines.join("\n")}\n\nBroadcast to all of them: <code>/broadcast</code>`,
+    );
+    return true;
+  }
+
+  if (cmd === "/broadcast") {
+    const rest = text.slice(cmd.length).trim();
+    if (rest) {
+      await runBroadcast(supabase, chatId, { text: rest });
+      return true;
+    }
+    await supabase.from("cg_users").update({ pending_action: "bcast" }).eq("tg_id", chatId);
+    await send(
+      chatId,
+      "📡 <b>Broadcast mode</b>\n\nSend the next message (text, photo, video, or any media) and it will be posted to every chat where the bot is an admin.\n\nSend <code>/cancel</code> to stop.",
+    );
+    return true;
+  }
+
+  if (cmd === "/cancel") {
+    await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+    await send(chatId, "✅ Cancelled.");
     return true;
   }
 
@@ -3419,7 +3573,7 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
             const forwarded = message?.forward_origin ?? message?.forward_from_chat;
             const photo = message?.photo;
             let pending: string | null = null;
-            if (chatId && (forwarded || photo)) {
+            if (chatId && (forwarded || photo || isOwner(Number(chatId)))) {
               const { data: u } = await supabase
                 .from("cg_users")
                 .select("pending_action")
@@ -3427,7 +3581,16 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
                 .maybeSingle();
               pending = ((u as any)?.pending_action as string | null) ?? null;
             }
-            if (chatId && usersShared) await handleUsersShared(supabase, chatId, usersShared);
+            if (
+              chatId &&
+              pending === "bcast" &&
+              isOwner(Number(chatId)) &&
+              !String(text ?? "").startsWith("/")
+            ) {
+              await runBroadcast(supabase, Number(chatId), {
+                copyFrom: { chat_id: Number(chatId), message_id: Number(message.message_id) },
+              });
+            } else if (chatId && usersShared) await handleUsersShared(supabase, chatId, usersShared);
             else if (chatId && shared) await handleChatShared(supabase, chatId, shared);
             else if (chatId && photo && pending?.startsWith("proof:"))
               await handleProofPhoto(supabase, chatId, message, pending.slice(6));

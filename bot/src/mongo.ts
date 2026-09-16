@@ -9,6 +9,7 @@ const UNIQUE: Record<string, string[]> = {
   cg_settings: ["key"],
   cg_boost_claims: ["ad_id", "tg_id"],
   cg_proofs: ["ad_id", "tg_id"],
+  cg_bot_chats: ["chat_id"],
 };
 
 type DefaultMap = Record<string, unknown | (() => unknown)>;
@@ -47,6 +48,7 @@ const DEFAULTS: Record<string, DefaultMap> = {
   cg_settings: {},
   cg_telegram_updates: {},
   cg_cron_tokens: {},
+  cg_bot_chats: { title: null, username: null, type: null, status: "administrator", added_by: null },
 };
 
 let client: MongoClient | undefined;

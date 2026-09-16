@@ -109,6 +109,36 @@ export type Database = {
           },
         ]
       }
+      cg_bot_chats: {
+        Row: {
+          added_by: number | null
+          chat_id: number
+          status: string
+          title: string | null
+          type: string | null
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          added_by?: number | null
+          chat_id: number
+          status?: string
+          title?: string | null
+          type?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          added_by?: number | null
+          chat_id?: number
+          status?: string
+          title?: string | null
+          type?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
       cg_completions: {
         Row: {
           ad_id: string
