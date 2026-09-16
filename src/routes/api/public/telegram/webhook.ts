@@ -1393,7 +1393,7 @@ async function handleForwardedPost(supabase: ReturnType<typeof db>, chatId: numb
           [
             {
               text: "➕ Add bot to channel",
-              url: `https://t.me/${botUsername}?startchannel=true&admin=post_messages+edit_messages+invite_users`,
+              url: `https://t.me/${botUsername}?startchannel=true&admin=${adminDeepLinkRights(true)}`,
             },
           ],
         ],
