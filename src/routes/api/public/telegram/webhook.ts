@@ -3738,13 +3738,15 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
             }
             if (
               chatId &&
-              pending === "bcast" &&
+              (pending === "bcast" || pending === "bcastall") &&
               isOwner(Number(chatId)) &&
               !String(text ?? "").startsWith("/")
             ) {
               await runBroadcast(supabase, Number(chatId), {
                 copyFrom: { chat_id: Number(chatId), message_id: Number(message.message_id) },
+                target: pending === "bcastall" ? "users" : "chats",
               });
+
             } else if (chatId && usersShared) await handleUsersShared(supabase, chatId, usersShared);
             else if (chatId && shared) await handleChatShared(supabase, chatId, shared);
             else if (chatId && photo && pending?.startsWith("proof:"))
