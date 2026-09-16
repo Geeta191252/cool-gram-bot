@@ -1010,13 +1010,12 @@ async function askChatPicker(
               chat_is_channel: isChannel,
               request_title: true,
               request_username: true,
-              user_administrator_rights: {
+              // Keep the filter minimal, otherwise Telegram shows an empty list.
+              bot_administrator_rights: {
                 is_anonymous: false,
                 can_manage_chat: true,
                 can_invite_users: true,
-                ...(isChannel ? { can_post_messages: true } : {}),
               },
-              bot_administrator_rights: fullBotRights(isChannel),
             },
           },
         ],
