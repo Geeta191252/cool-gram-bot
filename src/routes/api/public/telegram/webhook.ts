@@ -33,6 +33,7 @@ const SETTINGS: Record<string, { def: number; label: string }> = {
   min_channel: { def: 750, label: "Channel subscriber min price" },
   min_group: { def: 600, label: "Group join min price" },
   min_views: { def: 25, label: "Post view min price" },
+  min_reactions: { def: 25, label: "Reaction min price" },
   bot_all: { def: 900, label: "Bot start — all users min price" },
   bot_prem: { def: 1400, label: "Bot start — premium only min price" },
   bot_cond_all: { def: 3000, label: "Bot + conditions — all users min price" },
@@ -44,7 +45,42 @@ const SETTINGS: Record<string, { def: number; label: string }> = {
   commission_pct: { def: 15, label: "Task creation commission (%)" },
   star_rate: { def: 1900, label: `${COIN} credited per 1 Telegram Star` },
   min_withdraw: { def: 50000, label: "Minimum withdrawal amount" },
+  referral_bonus: { def: REFERRAL_BONUS_DEF, label: "Referral bonus per invited user" },
+  signup_bonus: { def: SIGNUP_BONUS_DEF, label: "Welcome bonus for a new user" },
 };
+
+// Friendly aliases so prices can be set with simple words.
+const SETTING_ALIASES: Record<string, string> = {
+  channel: "min_channel",
+  channels: "min_channel",
+  group: "min_group",
+  groups: "min_group",
+  view: "min_views",
+  views: "min_views",
+  post: "min_views",
+  posts: "min_views",
+  reaction: "min_reactions",
+  reactions: "min_reactions",
+  bot: "bot_all",
+  bots: "bot_all",
+  bot_premium: "bot_prem",
+  boost: "boost_7",
+  referral: "referral_bonus",
+  refer: "referral_bonus",
+  signup: "signup_bonus",
+  welcome: "signup_bonus",
+  commission: "commission_pct",
+  stars: "star_rate",
+  withdraw: "min_withdraw",
+};
+
+function settingKey(raw: string): string | null {
+  const k = (raw ?? "").trim().toLowerCase();
+  if (SETTINGS[k]) return k;
+  const alias = SETTING_ALIASES[k];
+  return alias && SETTINGS[alias] ? alias : null;
+}
+
 
 let settingsMap: Record<string, number> = {};
 let settingsLoadedAt = 0;
