@@ -2865,6 +2865,12 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
         { reply_markup: { inline_keyboard: [[{ text: "📸 Send proof again", callback_data: `proof:${adId}` }]] } },
       );
       await send(chatId, `❌ Proof rejected for <b>${(ad as any).title}</b>.`);
+      await supabase
+        .from("cg_proofs")
+        .update({ status: "rejected", resolved_at: new Date().toISOString() })
+        .eq("ad_id", adId)
+        .eq("tg_id", worker);
+
 
       // No automatic penalty. The rejection goes to the admin for review;
       // only the admin can decide to charge the advertiser.
