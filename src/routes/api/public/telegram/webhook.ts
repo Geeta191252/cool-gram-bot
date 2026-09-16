@@ -2643,6 +2643,114 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+  if (data.startsWith("proof:")) {
+    const adId = data.slice(6);
+    const { data: ad } = await supabase
+      .from("cg_ads")
+      .select("id, title, link, reward, budget_left, is_active, conditions")
+      .eq("id", adId)
+      .maybeSingle();
+    if (!ad || !(ad as any).is_active || (ad as any).budget_left < Number((ad as any).reward ?? 0)) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "This task is no longer available." });
+      return;
+    }
+    const { data: existing } = await supabase
+      .from("cg_completions")
+      .select("id")
+      .eq("ad_id", adId)
+      .eq("tg_id", chatId)
+      .maybeSingle();
+    if (existing) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "You have already completed this task." });
+      return;
+    }
+    await setPending(supabase, chatId, `proof:${adId}`, undefined);
+    await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    await send(
+      chatId,
+      `📸 <b>Send a screenshot as proof</b>\n\n` +
+        `Task: <b>${(ad as any).title}</b>\n` +
+        `Conditions: ${(ad as any).conditions}\n\n` +
+        `Complete the conditions, then send <b>one photo</b> here that shows it is done.\n` +
+        `The advertiser will review it and your reward will be credited after approval.`,
+    );
+    return;
+  }
+
+  if (data.startsWith("papv:") || data.startsWith("prej:")) {
+    const approve = data.startsWith("papv:");
+    const [, adIdRaw, workerRaw] = data.split(":");
+    const adId = adIdRaw ?? "";
+    const worker = Number(workerRaw);
+    const { data: ad } = await supabase
+      .from("cg_ads")
+      .select("id, title, reward, budget_left, is_active, owner_tg")
+      .eq("id", adId)
+      .maybeSingle();
+    if (!ad || !Number.isFinite(worker)) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Task not found." });
+      return;
+    }
+    if (chatId !== Number((ad as any).owner_tg) && chatId !== OWNER_TG) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Not allowed.", show_alert: true });
+      return;
+    }
+    const { data: already } = await supabase
+      .from("cg_completions")
+      .select("id")
+      .eq("ad_id", adId)
+      .eq("tg_id", worker)
+      .maybeSingle();
+    if (already) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Already reviewed." });
+      return;
+    }
+
+    if (!approve) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Rejected." });
+      await send(
+        worker,
+        `❌ <b>Your proof was rejected</b>\n\nTask: <b>${(ad as any).title}</b>\nComplete all the conditions and send a clear screenshot again.`,
+        { reply_markup: { inline_keyboard: [[{ text: "📸 Send proof again", callback_data: `proof:${adId}` }]] } },
+      );
+      await send(chatId, `❌ Proof rejected for <b>${(ad as any).title}</b>.`);
+      return;
+    }
+
+    const reward = Number((ad as any).reward);
+    if (!(ad as any).is_active || Number((ad as any).budget_left) < reward) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Campaign has no budget left.", show_alert: true });
+      return;
+    }
+    const { error: cErr } = await supabase.from("cg_completions").insert({ ad_id: adId, tg_id: worker });
+    if (cErr) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Already reviewed." });
+      return;
+    }
+    const { data: wu } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", worker)
+      .maybeSingle();
+    const newBal = ((wu as any)?.balance ?? 0) + reward;
+    await supabase.from("cg_users").update({ balance: newBal }).eq("tg_id", worker);
+    await supabase
+      .from("cg_ads")
+      .update({ budget_left: Number((ad as any).budget_left) - reward })
+      .eq("id", adId);
+    await notifyIfCampaignFinished(supabase, adId);
+    await supabase
+      .from("cg_transactions")
+      .insert({ tg_id: worker, amount: reward, reason: `Task: ${(ad as any).title}` });
+    await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Approved ✅" });
+    await send(
+      worker,
+      `✅ <b>Your proof was approved!</b>\n\nTask: <b>${(ad as any).title}</b>\n+${reward.toLocaleString("en-US")} ${COIN} credited.\n💰 Balance: ${newBal.toLocaleString("en-US")} ${COIN}`,
+    );
+    await send(chatId, `✅ Proof approved for <b>${(ad as any).title}</b> — ${reward.toLocaleString("en-US")} ${COIN} paid.`);
+    return;
+  }
+
   if (data.startsWith("done:")) {
 
     const adId = data.slice(5);
