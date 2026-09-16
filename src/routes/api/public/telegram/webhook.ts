@@ -2332,6 +2332,36 @@ async function handleCallback(supabase: ReturnType<typeof db>, cb: any) {
 async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
   const chatId = cb.message?.chat?.id as number;
   const data = String(cb.data ?? "");
+  const fromId = Number(cb.from?.id ?? chatId);
+
+  if (data === "chkjoin") {
+    if (await isSponsorMember(fromId)) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "✅ Verified!" });
+      await send(chatId, "✅ Thanks for joining! You can use Cool Gram now.", {
+        reply_markup: MAIN_KEYBOARD,
+      });
+    } else {
+      await tg("answerCallbackQuery", {
+        callback_query_id: cb.id,
+        text: "❌ You have not joined the channel yet.",
+        show_alert: true,
+      });
+    }
+    return;
+  }
+
+  if (fromId !== OWNER_TG && !(await isSponsorMember(fromId))) {
+    await tg("answerCallbackQuery", {
+      callback_query_id: cb.id,
+      text: "🔒 Join our channel first to continue.",
+      show_alert: true,
+    });
+    const p = sponsorPrompt();
+    await send(chatId, p.text, { reply_markup: p.reply_markup });
+    return;
+  }
+
+
 
 
   if (data === "dep_menu") {
