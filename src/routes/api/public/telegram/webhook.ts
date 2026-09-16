@@ -2639,17 +2639,22 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       );
       return;
     case "📊 Bots and Statistics": {
-      const users = await supabase.from("cg_users").select("id", { count: "exact", head: true });
-      const ads = await supabase
-        .from("cg_ads")
-        .select("id", { count: "exact", head: true })
-        .eq("is_active", true);
+      const [users, s, myDone] = await Promise.all([
+        supabase.from("cg_users").select("id", { count: "exact", head: true }),
+        completionStats(supabase),
+        supabase.from("cg_completions").select("id", { count: "exact", head: true }).eq("tg_id", chatId),
+      ]);
       await send(
         chatId,
-        `📊 <b>COOL GRAM statistics</b>\n\n👥 Users: <b>${users.count ?? 0}</b>\n📢 Active campaigns: <b>${ads.count ?? 0}</b>`,
+        `📊 <b>COOL GRAM statistics</b>\n\n` +
+          `👥 Users: <b>${(users.count ?? 0).toLocaleString("en-US")}</b>\n` +
+          `📢 Campaigns created: <b>${s.ads.toLocaleString("en-US")}</b>\n` +
+          `🙋 Your completed tasks: <b>${(myDone.count ?? 0).toLocaleString("en-US")}</b>\n\n` +
+          `<b>Completed by category</b>\n${statsText(s)}`,
       );
       return;
     }
+
     case "🔗 Useful Links":
       await send(
         chatId,
