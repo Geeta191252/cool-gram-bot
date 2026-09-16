@@ -58,7 +58,13 @@ export function getDb(): Promise<Db> {
   if (!dbPromise) {
     const uri = process.env["MONGODB_URI"];
     if (!uri) throw new Error("MONGODB_URI is not configured");
-    client = new MongoClient(uri, { maxPoolSize: 10 });
+    client = new MongoClient(uri, {
+      maxPoolSize: 50,
+      minPoolSize: 5,
+      maxIdleTimeMS: 300_000,
+      serverSelectionTimeoutMS: 8_000,
+      compressors: ["zlib"],
+    });
     dbPromise = client
       .connect()
       .then(async (c) => {
@@ -84,8 +90,17 @@ async function ensureIndexes(db: Db) {
       .catch(() => undefined);
   }
   await db.collection("cg_ads").createIndex({ is_active: 1, category: 1 }).catch(() => undefined);
+  await db.collection("cg_ads").createIndex({ owner_tg: 1 }).catch(() => undefined);
   await db.collection("cg_completions").createIndex({ tg_id: 1 }).catch(() => undefined);
-  await db.collection("cg_transactions").createIndex({ tg_id: 1, created_at: -1 }).catch(() => undefined);
+  await db.collection("cg_completions").createIndex({ ad_id: 1, tg_id: 1 }).catch(() => undefined);
+  await db.collection("cg_proofs").createIndex({ tg_id: 1 }).catch(() => undefined);
+  await db.collection("cg_proofs").createIndex({ status: 1, created_at: 1 }).catch(() => undefined);
+  await db.collection("cg_boost_claims").createIndex({ status: 1, last_claim_at: 1 }).catch(() => undefined);
+  await db.collection("cg_withdrawals").createIndex({ status: 1, created_at: -1 }).catch(() => undefined);
+  await db
+    .collection("cg_transactions")
+    .createIndex({ tg_id: 1, created_at: -1 })
+    .catch(() => undefined);
   await db
     .collection("cg_telegram_updates")
     .createIndex({ created_at: 1 }, { expireAfterSeconds: 86400 })
@@ -125,13 +140,22 @@ class QueryBuilder implements PromiseLike<Result> {
   private wantRows = false;
   private headMode = false;
   private countMode = false;
+  private projection: Record<string, 1> | undefined;
 
   constructor(private table: string) {}
 
-  select(_columns?: string, opts?: { count?: string; head?: boolean }) {
+  select(columns?: string, opts?: { count?: string; head?: boolean }) {
     if (this.op === "select") {
       if (opts?.count) this.countMode = true;
       if (opts?.head) this.headMode = true;
+      if (columns && !columns.includes("*") && !columns.includes("(")) {
+        const spec: Record<string, 1> = {};
+        for (const c of columns.split(",")) {
+          const name = c.trim();
+          if (name) spec[name] = 1;
+        }
+        if (Object.keys(spec).length) this.projection = spec;
+      }
     }
     this.wantRows = true;
     return this;
@@ -294,6 +318,7 @@ class QueryBuilder implements PromiseLike<Result> {
       }
 
       let cursor = col.find(this.filter());
+      if (this.projection) cursor = cursor.project(this.projection) as typeof cursor;
       if (this.sortSpec) cursor = cursor.sort(this.sortSpec);
       if (this.limitN !== undefined) cursor = cursor.limit(this.limitN);
       const rows = this.shape(await cursor.toArray());
