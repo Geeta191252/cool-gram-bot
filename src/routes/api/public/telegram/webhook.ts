@@ -2273,6 +2273,10 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       await showPromoteMenu(supabase, chatId);
       return;
     case "💸 Withdrawal": {
+      if (!withdrawOpen()) {
+        await send(chatId, WITHDRAW_CLOSED_MSG);
+        return;
+      }
       const min = cfg("min_withdraw");
       await supabase.from("cg_users").update({ pending_action: "withdraw" }).eq("tg_id", chatId);
       await send(
