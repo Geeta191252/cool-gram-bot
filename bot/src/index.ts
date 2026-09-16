@@ -2,6 +2,12 @@ import http from "node:http";
 import { handleUpdate, deriveSecret, safeEqual } from "./handler.js";
 import { runBoostReminders, runLeaveCheck, runAutoApprove } from "./crons.js";
 import { getDb } from "./mongo.js";
+import {
+  handleSupportUpdate,
+  supportEnabled,
+  supportToken,
+  SUPPORT_WEBHOOK_PATH,
+} from "./support.js";
 
 const PORT = Number(process.env["PORT"] ?? 8000);
 const WEBHOOK_PATH = process.env["WEBHOOK_PATH"] ?? "/telegram/webhook";
@@ -50,6 +56,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === SUPPORT_WEBHOOK_PATH && supportEnabled()) {
+    const expected = deriveSecret(supportToken());
+    const actual = String(req.headers["x-telegram-bot-api-secret-token"] ?? "");
+    if (!safeEqual(actual, expected)) {
+      res.writeHead(401).end("Unauthorized");
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+    try {
+      const update = JSON.parse(await readBody(req));
+      await handleSupportUpdate(update);
+    } catch (err) {
+      console.error("Support update failed", err);
+    }
+    return;
+  }
+
   res.writeHead(404).end("Not found");
 });
 
@@ -72,6 +96,26 @@ async function registerWebhook() {
   console.log("setWebhook:", await res.text());
 }
 
+async function registerSupportWebhook() {
+  if (!PUBLIC_URL || !supportEnabled()) {
+    console.warn("PUBLIC_URL or SUPPORT_BOT_TOKEN missing — skipping support setWebhook");
+    return;
+  }
+  const token = supportToken();
+  const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      url: `${PUBLIC_URL}${SUPPORT_WEBHOOK_PATH}`,
+      secret_token: deriveSecret(token),
+      allowed_updates: ["message", "edited_message"],
+      drop_pending_updates: false,
+      max_connections: 40,
+    }),
+  });
+  console.log("support setWebhook:", await res.text());
+}
+
 function scheduleJob(name: string, everyMs: number, job: () => Promise<unknown>) {
   const run = async () => {
     try {
@@ -88,6 +132,7 @@ async function main() {
   await getDb();
   server.listen(PORT, () => console.log(`Cool Gram bot listening on :${PORT}`));
   await registerWebhook();
+  await registerSupportWebhook();
   scheduleJob("boost-reminders", 60 * 60 * 1000, runBoostReminders);
   scheduleJob("leave-check", 60 * 60 * 1000, runLeaveCheck);
   scheduleJob("auto-approve", 30 * 60 * 1000, runAutoApprove);
