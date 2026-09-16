@@ -374,7 +374,7 @@ async function getUser(supabase: ReturnType<typeof db>, from: any, startPayload?
       tg_id: from.id,
       username: from.username ?? null,
       first_name: from.first_name ?? null,
-      balance: SIGNUP_BONUS,
+      balance: cfg("signup_bonus"),
       referred_by: referrer,
     })
     .select("tg_id, balance, referral_count, pending_action")
@@ -382,7 +382,7 @@ async function getUser(supabase: ReturnType<typeof db>, from: any, startPayload?
 
   await supabase.from("cg_transactions").insert({
     tg_id: from.id,
-    amount: SIGNUP_BONUS,
+    amount: cfg("signup_bonus"),
     reason: "Welcome bonus",
   });
 
@@ -396,14 +396,14 @@ async function getUser(supabase: ReturnType<typeof db>, from: any, startPayload?
       await supabase
         .from("cg_users")
         .update({
-          balance: (refUser as any).balance + REFERRAL_BONUS,
+          balance: (refUser as any).balance + cfg("referral_bonus"),
           referral_count: (refUser as any).referral_count + 1,
         })
         .eq("tg_id", referrer);
       await supabase
         .from("cg_transactions")
-        .insert({ tg_id: referrer, amount: REFERRAL_BONUS, reason: "Referral bonus" });
-      await send(referrer, `🎉 New referral joined! +${REFERRAL_BONUS} ${COIN} added to your balance.`);
+        .insert({ tg_id: referrer, amount: cfg("referral_bonus"), reason: "Referral bonus" });
+      await send(referrer, `🎉 New referral joined! +${cfg("referral_bonus")} ${COIN} added to your balance.`);
     }
   }
 
@@ -2160,7 +2160,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
 
   if (text.startsWith("/start")) {
     const caption = `👋 <b>${from.first_name ?? "friend"}, welcome to COOL GRAM!</b>\n\nThe Telegram promotion platform${
-      isNew ? `\n\n🎁 Welcome bonus: <b>+${SIGNUP_BONUS} ${COIN}</b>` : ""
+      isNew ? `\n\n🎁 Welcome bonus: <b>+${cfg("signup_bonus")} ${COIN}</b>` : ""
     }`;
     const video = await tg("sendVideo", {
       chat_id: chatId,
@@ -2205,7 +2205,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       );
       await send(
         chatId,
-        `👛 <b>Wallet</b>\n\nID: <code>${chatId}</code>\nBalance: <b>${user.balance} ${COIN}</b>\nReferrals: <b>${user.referral_count}</b>\n\n🔗 Your invite link:\nhttps://t.me/${bot}?start=ref_${chatId}\nYou get <b>+${REFERRAL_BONUS} ${COIN}</b> per invite.\n\n🧾 <b>Last activity</b>\n${lines.length ? lines.join("\n") : "No activity yet."}`,
+        `👛 <b>Wallet</b>\n\nID: <code>${chatId}</code>\nBalance: <b>${user.balance} ${COIN}</b>\nReferrals: <b>${user.referral_count}</b>\n\n🔗 Your invite link:\nhttps://t.me/${bot}?start=ref_${chatId}\nYou get <b>+${cfg("referral_bonus")} ${COIN}</b> per invite.\n\n🧾 <b>Last activity</b>\n${lines.length ? lines.join("\n") : "No activity yet."}`,
         {
           reply_markup: {
             inline_keyboard: [[{ text: "⭐ Deposit with Telegram Stars", callback_data: "dep_menu" }]],
@@ -2235,7 +2235,7 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
     case "ℹ️ Instruction":
       await send(
         chatId,
-        `ℹ️ <b>How COOL GRAM works</b>\n\n1️⃣ <b>Earnings</b> — open a task, join the channel, tap "I did it" and get ${COIN}.\n2️⃣ <b>Promote</b> — spend your ${COIN} to promote your own channel.\n3️⃣ <b>Wallet</b> — balance, history and referral link.\n4️⃣ Invite friends and earn ${REFERRAL_BONUS} ${COIN} per invite.`,
+        `ℹ️ <b>How COOL GRAM works</b>\n\n1️⃣ <b>Earnings</b> — open a task, join the channel, tap "I did it" and get ${COIN}.\n2️⃣ <b>Promote</b> — spend your ${COIN} to promote your own channel.\n3️⃣ <b>Wallet</b> — balance, history and referral link.\n4️⃣ Invite friends and earn ${cfg("referral_bonus")} ${COIN} per invite.`,
       );
       return;
     default:
