@@ -1686,9 +1686,10 @@ async function handleProofPhoto(
   }
   const { data: ad } = await supabase
     .from("cg_ads")
-    .select("id, title, link, reward, budget_left, is_active, owner_tg, conditions")
+    .select("id, title, link, reward, budget_left, is_active, owner_tg, conditions, category")
     .eq("id", adId)
     .maybeSingle();
+
   await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
   if (!ad || !(ad as any).is_active) {
     await send(chatId, "\u274c This task is no longer available.");
@@ -1727,11 +1728,45 @@ async function handleProofPhoto(
       reply_markup: markup,
     });
   }
+  await supabase
+    .from("cg_proofs")
+    .upsert(
+      {
+        ad_id: adId,
+        tg_id: chatId,
+        file_id: fileId,
+        status: "pending",
+        created_at: new Date().toISOString(),
+        resolved_at: null,
+      } as any,
+      { onConflict: "ad_id,tg_id" },
+    );
+
+  const cat = String((ad as any).category ?? "");
+  const nextLabel =
+    cat === "bots"
+      ? "\u27a1\ufe0f Next Bot"
+      : cat === "channels"
+        ? "\u27a1\ufe0f Next Channel"
+        : cat === "groups"
+          ? "\u27a1\ufe0f Next Group"
+          : "\u27a1\ufe0f Next Task";
   await send(
     chatId,
-    `\u2705 <b>Proof sent for review</b>\n\nTask: <b>${(ad as any).title}</b>\nThe advertiser will check your screenshot. You will get your ${COIN} as soon as it is approved.`,
+    `\u2705 Your completion has been sent to the author for review.\n` +
+      `\u23f3 If it is not reviewed within <b>24 hours</b> — payment will be made automatically.\n\n` +
+      `Task: <b>${(ad as any).title}</b>\nReward: <b>${Number((ad as any).reward).toLocaleString("en-US")} ${COIN}</b>`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: nextLabel, callback_data: cat ? `cat:${cat}` : "earn" }],
+          [{ text: "\ud83d\udd19 Back", callback_data: "earn" }],
+        ],
+      },
+    },
   );
 }
+
 
 async function handleText(supabase: ReturnType<typeof db>, chatId: number, from: any, text: string) {
   const startPayload = text.startsWith("/start") ? text.split(" ")[1] : undefined;
@@ -2125,7 +2160,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     await send(
       chatId,
-      `📝 <b>Rules</b>\n\n1️⃣ Open the task, join the channel/group, then tap "I did it".\n2️⃣ Stay in every channel and group for at least 7 days. If you leave earlier, your whole balance is reset to 0.\n3️⃣ Each task counts only once.\n4️⃣ Cheating may reset your balance to zero.`,
+      `📝 <b>Rules</b>\n\n1️⃣ Open the task, join the channel/group, then tap "I did it".\n2️⃣ Stay in every channel and group, and keep every bot you started, for at least 7 days. If you leave, block or remove them earlier, a penalty equal to the full reward of that task is deducted from your balance.\n3️⃣ Each task counts only once per user — every campaign is shown to you a single time.\n4️⃣ Cheating may reset your balance to zero.`,
       { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
     );
     return;
@@ -2830,6 +2865,12 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
         { reply_markup: { inline_keyboard: [[{ text: "📸 Send proof again", callback_data: `proof:${adId}` }]] } },
       );
       await send(chatId, `❌ Proof rejected for <b>${(ad as any).title}</b>.`);
+      await supabase
+        .from("cg_proofs")
+        .update({ status: "rejected", resolved_at: new Date().toISOString() })
+        .eq("ad_id", adId)
+        .eq("tg_id", worker);
+
 
       // No automatic penalty. The rejection goes to the admin for review;
       // only the admin can decide to charge the advertiser.
@@ -2890,7 +2931,13 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       worker,
       `✅ <b>Your proof was approved!</b>\n\nTask: <b>${(ad as any).title}</b>\n+${reward.toLocaleString("en-US")} ${COIN} credited.\n💰 Balance: ${newBal.toLocaleString("en-US")} ${COIN}`,
     );
+    await supabase
+      .from("cg_proofs")
+      .update({ status: "approved", resolved_at: new Date().toISOString() })
+      .eq("ad_id", adId)
+      .eq("tg_id", worker);
     await send(chatId, `✅ Proof approved for <b>${(ad as any).title}</b> — ${reward.toLocaleString("en-US")} ${COIN} paid.`);
+
     return;
   }
 

@@ -8,6 +8,7 @@ const UNIQUE: Record<string, string[]> = {
   cg_telegram_updates: ["update_id"],
   cg_settings: ["key"],
   cg_boost_claims: ["ad_id", "tg_id"],
+  cg_proofs: ["ad_id", "tg_id"],
 };
 
 type DefaultMap = Record<string, unknown | (() => unknown)>;
@@ -40,6 +41,7 @@ const DEFAULTS: Record<string, DefaultMap> = {
   },
   cg_withdrawals: { status: "pending", username: null, resolved_at: null },
   cg_star_payments: { charge_id: null, username: null },
+  cg_proofs: { status: "pending", file_id: null, resolved_at: null },
   cg_completions: {},
   cg_transactions: {},
   cg_settings: {},
