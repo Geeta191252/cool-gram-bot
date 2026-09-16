@@ -58,7 +58,13 @@ export function getDb(): Promise<Db> {
   if (!dbPromise) {
     const uri = process.env["MONGODB_URI"];
     if (!uri) throw new Error("MONGODB_URI is not configured");
-    client = new MongoClient(uri, { maxPoolSize: 10 });
+    client = new MongoClient(uri, {
+      maxPoolSize: 50,
+      minPoolSize: 5,
+      maxIdleTimeMS: 300_000,
+      serverSelectionTimeoutMS: 8_000,
+      compressors: ["zlib"],
+    });
     dbPromise = client
       .connect()
       .then(async (c) => {
