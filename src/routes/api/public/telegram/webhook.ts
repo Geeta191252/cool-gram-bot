@@ -2494,6 +2494,17 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       );
       return;
     }
+    case "🆘 Cool Gram Support":
+      await send(
+        chatId,
+        `🆘 <b>Cool Gram Support</b>\n\nTap the button below to open our support bot <b>@${SUPPORT_BOT}</b>.\n\nThere you can describe your problem by message, and also send photos or videos. Our team will reply as soon as possible.`,
+        {
+          reply_markup: {
+            inline_keyboard: [[{ text: "💬 Open support chat", url: SUPPORT_LINK }]],
+          },
+        },
+      );
+      return;
     case "📊 Bots and Statistics": {
       const users = await supabase.from("cg_users").select("id", { count: "exact", head: true });
       const ads = await supabase
