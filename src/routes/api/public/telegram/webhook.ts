@@ -1834,12 +1834,12 @@ async function runBroadcast(
   const failed: string[] = [];
   for (const c of rows) {
     const res: any = payload.copyFrom
-      ? await tg("copyMessage", {
+      ? await tgRaw("copyMessage", {
           chat_id: c.chat_id,
           from_chat_id: payload.copyFrom.chat_id,
           message_id: payload.copyFrom.message_id,
         })
-      : await tg("sendMessage", {
+      : await tgRaw("sendMessage", {
           chat_id: c.chat_id,
           text: payload.text,
           parse_mode: "HTML",
