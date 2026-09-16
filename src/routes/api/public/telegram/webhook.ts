@@ -64,6 +64,13 @@ const SETTING_ALIASES: Record<string, string> = {
   bot: "bot_all",
   bots: "bot_all",
   bot_premium: "bot_prem",
+  premium: "bot_prem",
+  prime: "bot_prem",
+  bot_prime: "bot_prem",
+  premium_bot: "bot_prem",
+  premium_cond: "bot_cond_prem",
+  cond_premium: "bot_cond_prem",
+  prime_cond: "bot_cond_prem",
   boost: "boost_7",
   referral: "referral_bonus",
   refer: "referral_bonus",
@@ -1673,7 +1680,7 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/takebalance &lt;tg_id&gt; &lt;amount&gt;</code> — remove ${COIN}\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
       `<code>/deposits</code> — last Stars deposits\n\n` +
-      `Examples:\n<code>/setprice channel 800</code>\n<code>/setprice group 600</code>\n<code>/setprice views 30</code>\n<code>/setprice bot 900</code>\n<code>/setprice reactions 25</code>\n<code>/setprice referral 600</code>`,
+      `Examples:\n<code>/setprice channel 800</code>\n<code>/setprice group 600</code>\n<code>/setprice views 30</code>\n<code>/setprice bot 900</code>\n<code>/setprice premium 1400</code> — bot start, Premium-only audience\n<code>/setprice premium_cond 4000</code> — bot + conditions, Premium-only\n<code>/setprice reactions 25</code>\n<code>/setprice referral 600</code>`,
   );
 }
 
