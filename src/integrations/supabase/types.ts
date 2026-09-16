@@ -19,6 +19,7 @@ export type Database = {
           boost_days: number | null
           budget_left: number
           category: string
+          conditions: string | null
           created_at: string
           id: string
           is_active: boolean
@@ -34,6 +35,7 @@ export type Database = {
           boost_days?: number | null
           budget_left?: number
           category?: string
+          conditions?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
@@ -49,6 +51,7 @@ export type Database = {
           boost_days?: number | null
           budget_left?: number
           category?: string
+          conditions?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
