@@ -687,10 +687,7 @@ async function showTask(
     );
     return;
   }
-  const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
-  const doneIds = (done ?? []).map((d: any) => d.ad_id);
   const backCb = category === "bots" ? "cat:bots" : "earn";
-
 
   let query = supabase
     .from("cg_ads")
@@ -704,29 +701,10 @@ async function showTask(
     else query = query.eq("subtype", subtype);
   }
   const { data: allAds } = await query;
-  const doneSet = new Set(doneIds.map(String));
 
-  // Hide chats the user already completed under another campaign (same link/chat)
-  let doneRefs = new Set<string>();
-  if (doneIds.length) {
-    const { data: doneAds } = await supabase
-      .from("cg_ads")
-      .select("id, link, src_chat")
-      .in("id", doneIds);
-    doneRefs = new Set(
-      ((doneAds ?? []) as any[])
-        .map((a) => chatRefFromAd(a))
-        .filter(Boolean)
-        .map((r) => String(r).toLowerCase()),
-    );
-  }
+  const f = await taskFilters(supabase, chatId);
+  let ads = ((allAds ?? []) as any[]).filter((a) => f.isAvailable(a));
 
-  let ads = ((allAds ?? []) as any[]).filter((a) => {
-    if (a.budget_left < a.reward || doneSet.has(String(a.id))) return false;
-    const ref = chatRefFromAd(a);
-    if (ref && doneRefs.has(String(ref).toLowerCase())) return false;
-    return true;
-  });
 
   // For join tasks, hide chats the user is already a member of
   if (category === "channels" || category === "groups") {
