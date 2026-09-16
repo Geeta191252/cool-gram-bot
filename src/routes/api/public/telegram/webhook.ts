@@ -1828,7 +1828,10 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/withdrawoff</code> / <code>/withdrawon</code> — close or open withdrawals\n` +
       `<code>/withdrawstatus</code> — current withdrawal status\n` +
       `<code>/chats</code> — every channel/group where the bot is admin\n` +
-      `<code>/broadcast</code> — send any message (text/photo/video) to all those chats\n\n` +
+      `<code>/broadcast</code> — send any message (text/photo/video) to all those chats\n` +
+      `<code>/broadcastall</code> — send any message to <b>all users</b> of the bot\n` +
+      `<code>/status</code> — full bot status: users, coins, tasks completed per category\n\n`.slice(0, 0) +
+      `<code>/status</code> — bot status &amp; task statistics\n\n` +
       `Examples:\n<code>/setprice channel 800</code>\n<code>/setprice group 600</code>\n<code>/setprice views 30</code>\n<code>/setprice bot 900</code>\n<code>/setprice premium 1400</code> — bot start, Premium-only audience\n<code>/setprice premium_cond 4000</code> — bot + conditions, Premium-only\n<code>/setprice reactions 25</code>\n<code>/setprice referral 600</code>`,
   );
 }
