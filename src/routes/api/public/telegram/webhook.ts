@@ -358,16 +358,16 @@ const CATEGORIES: { key: string; label: string }[] = [
 async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
   const { data: ads } = await supabase
     .from("cg_ads")
-    .select("id, category, reward, budget_left")
+    .select("id, category, reward, budget_left, link, src_chat")
     .eq("is_active", true)
     .neq("owner_tg", chatId);
-  const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
-  const doneSet = new Set(((done ?? []) as any[]).map((d) => String(d.ad_id)));
+  const f = await taskFilters(supabase, chatId);
   const counts: Record<string, number> = {};
   for (const a of (ads ?? []) as any[]) {
-    if (doneSet.has(String(a.id)) || a.budget_left < a.reward) continue;
+    if (!f.isAvailable(a)) continue;
     counts[a.category] = (counts[a.category] ?? 0) + 1;
   }
+
 
   const rows: any[] = [];
   for (let i = 0; i < CATEGORIES.length; i += 2) {
@@ -387,6 +387,46 @@ async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
 }
 
 const PAGE_SIZE = 10;
+
+// Shared availability filter so category counts and the task list always agree.
+async function taskFilters(supabase: ReturnType<typeof db>, chatId: number) {
+  const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
+  const doneIds = ((done ?? []) as any[]).map((d) => d.ad_id);
+  const doneSet = new Set(doneIds.map(String));
+
+  const { data: proofs } = await supabase
+    .from("cg_proofs")
+    .select("ad_id, status")
+    .eq("tg_id", chatId);
+  const pendingSet = new Set(
+    ((proofs ?? []) as any[])
+      .filter((p) => ["pending", "approved", "auto_approved"].includes(String(p.status)))
+      .map((p) => String(p.ad_id)),
+  );
+
+  let doneRefs = new Set<string>();
+  if (doneIds.length) {
+    const { data: doneAds } = await supabase.from("cg_ads").select("id, link, src_chat").in("id", doneIds);
+    doneRefs = new Set(
+      ((doneAds ?? []) as any[])
+        .map((a) => chatRefFromAd(a))
+        .filter(Boolean)
+        .map((r) => String(r).toLowerCase()),
+    );
+  }
+
+  return {
+    doneIds,
+    isAvailable(ad: any) {
+      if (Number(ad.budget_left) < Number(ad.reward)) return false;
+      if (doneSet.has(String(ad.id)) || pendingSet.has(String(ad.id))) return false;
+      const ref = chatRefFromAd(ad);
+      if (ref && doneRefs.has(String(ref).toLowerCase())) return false;
+      return true;
+    },
+  };
+}
+
 
 function actionVerb(category?: string) {
   if (category === "groups") return "Join";
@@ -443,18 +483,18 @@ const BOT_SUBTYPES: { key: string; label: string; title: string; desc: string }[
 async function showBotSubcategories(supabase: ReturnType<typeof db>, chatId: number) {
   const { data: ads } = await supabase
     .from("cg_ads")
-    .select("id, subtype, reward, budget_left")
+    .select("id, subtype, reward, budget_left, link, src_chat")
     .eq("is_active", true)
     .eq("category", "bots")
     .neq("owner_tg", chatId);
-  const { data: doneB } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
-  const doneSetB = new Set(((doneB ?? []) as any[]).map((d) => String(d.ad_id)));
+  const f = await taskFilters(supabase, chatId);
   const counts: Record<string, number> = {};
   for (const a of (ads ?? []) as any[]) {
-    if (doneSetB.has(String(a.id)) || a.budget_left < a.reward) continue;
+    if (!f.isAvailable(a)) continue;
     const k = a.subtype ?? "plain";
     counts[k] = (counts[k] ?? 0) + 1;
   }
+
   const body = BOT_SUBTYPES.map(
     (s) => `${s.title} — ${(counts[s.key] ?? 0).toLocaleString("en-US")}\n${s.desc}`,
   ).join("\n\n");
@@ -647,10 +687,7 @@ async function showTask(
     );
     return;
   }
-  const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
-  const doneIds = (done ?? []).map((d: any) => d.ad_id);
   const backCb = category === "bots" ? "cat:bots" : "earn";
-
 
   let query = supabase
     .from("cg_ads")
@@ -664,29 +701,10 @@ async function showTask(
     else query = query.eq("subtype", subtype);
   }
   const { data: allAds } = await query;
-  const doneSet = new Set(doneIds.map(String));
 
-  // Hide chats the user already completed under another campaign (same link/chat)
-  let doneRefs = new Set<string>();
-  if (doneIds.length) {
-    const { data: doneAds } = await supabase
-      .from("cg_ads")
-      .select("id, link, src_chat")
-      .in("id", doneIds);
-    doneRefs = new Set(
-      ((doneAds ?? []) as any[])
-        .map((a) => chatRefFromAd(a))
-        .filter(Boolean)
-        .map((r) => String(r).toLowerCase()),
-    );
-  }
+  const f = await taskFilters(supabase, chatId);
+  let ads = ((allAds ?? []) as any[]).filter((a) => f.isAvailable(a));
 
-  let ads = ((allAds ?? []) as any[]).filter((a) => {
-    if (a.budget_left < a.reward || doneSet.has(String(a.id))) return false;
-    const ref = chatRefFromAd(a);
-    if (ref && doneRefs.has(String(ref).toLowerCase())) return false;
-    return true;
-  });
 
   // For join tasks, hide chats the user is already a member of
   if (category === "channels" || category === "groups") {
