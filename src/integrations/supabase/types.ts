@@ -156,6 +156,44 @@ export type Database = {
         }
         Relationships: []
       }
+      cg_proofs: {
+        Row: {
+          ad_id: string
+          created_at: string
+          file_id: string | null
+          id: string
+          resolved_at: string | null
+          status: string
+          tg_id: number
+        }
+        Insert: {
+          ad_id: string
+          created_at?: string
+          file_id?: string | null
+          id?: string
+          resolved_at?: string | null
+          status?: string
+          tg_id: number
+        }
+        Update: {
+          ad_id?: string
+          created_at?: string
+          file_id?: string | null
+          id?: string
+          resolved_at?: string | null
+          status?: string
+          tg_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cg_proofs_ad_id_fkey"
+            columns: ["ad_id"]
+            isOneToOne: false
+            referencedRelation: "cg_ads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cg_settings: {
         Row: {
           key: string
