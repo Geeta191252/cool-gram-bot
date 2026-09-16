@@ -1976,6 +1976,8 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
 
   if (text.startsWith("/") && (await handleAdminCommand(supabase, chatId, text))) return;
 
+  if (!(await sponsorGate(Number(from?.id ?? chatId), chatId))) return;
+
   if (text.startsWith("/deposit")) {
     await showDepositMenu(supabase, chatId);
     return;
