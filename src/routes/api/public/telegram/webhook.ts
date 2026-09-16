@@ -388,6 +388,46 @@ async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
 
 const PAGE_SIZE = 10;
 
+// Shared availability filter so category counts and the task list always agree.
+async function taskFilters(supabase: ReturnType<typeof db>, chatId: number) {
+  const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
+  const doneIds = ((done ?? []) as any[]).map((d) => d.ad_id);
+  const doneSet = new Set(doneIds.map(String));
+
+  const { data: proofs } = await supabase
+    .from("cg_proofs")
+    .select("ad_id, status")
+    .eq("tg_id", chatId);
+  const pendingSet = new Set(
+    ((proofs ?? []) as any[])
+      .filter((p) => ["pending", "approved", "auto_approved"].includes(String(p.status)))
+      .map((p) => String(p.ad_id)),
+  );
+
+  let doneRefs = new Set<string>();
+  if (doneIds.length) {
+    const { data: doneAds } = await supabase.from("cg_ads").select("id, link, src_chat").in("id", doneIds);
+    doneRefs = new Set(
+      ((doneAds ?? []) as any[])
+        .map((a) => chatRefFromAd(a))
+        .filter(Boolean)
+        .map((r) => String(r).toLowerCase()),
+    );
+  }
+
+  return {
+    doneIds,
+    isAvailable(ad: any) {
+      if (Number(ad.budget_left) < Number(ad.reward)) return false;
+      if (doneSet.has(String(ad.id)) || pendingSet.has(String(ad.id))) return false;
+      const ref = chatRefFromAd(ad);
+      if (ref && doneRefs.has(String(ref).toLowerCase())) return false;
+      return true;
+    },
+  };
+}
+
+
 function actionVerb(category?: string) {
   if (category === "groups") return "Join";
   if (category === "views") return "View";
