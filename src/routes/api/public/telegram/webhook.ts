@@ -1816,6 +1816,46 @@ function priceListText() {
   return `💲 <b>Prices &amp; settings</b>\n\n${lines.join("\n\n")}\n\nChange: <code>/setprice &lt;key&gt; &lt;value&gt;</code>\nReset: <code>/resetprice &lt;key&gt;</code> or <code>/resetprice all</code>`;
 }
 
+async function runBroadcast(
+  supabase: ReturnType<typeof db>,
+  chatId: number,
+  payload: { text?: string; copyFrom?: { chat_id: number; message_id: number } },
+) {
+  await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+  const { data: chats } = await supabase.from("cg_bot_chats").select("chat_id,title");
+  const rows = (chats ?? []) as any[];
+  if (!rows.length) {
+    await send(chatId, "📭 The bot is not an admin in any chat yet, so there is nothing to broadcast to.");
+    return;
+  }
+  await send(chatId, `📡 Sending to <b>${rows.length}</b> chats…`);
+
+  let sent = 0;
+  const failed: string[] = [];
+  for (const c of rows) {
+    const res: any = payload.copyFrom
+      ? await tg("copyMessage", {
+          chat_id: c.chat_id,
+          from_chat_id: payload.copyFrom.chat_id,
+          message_id: payload.copyFrom.message_id,
+        })
+      : await tg("sendMessage", {
+          chat_id: c.chat_id,
+          text: payload.text,
+          parse_mode: "HTML",
+          disable_web_page_preview: false,
+        });
+    if (res?.ok) sent++;
+    else failed.push(String(c.title ?? c.chat_id));
+  }
+
+  await send(
+    chatId,
+    `📡 <b>Broadcast finished</b>\n\n✅ Sent: <b>${sent}</b>\n❌ Failed: <b>${failed.length}</b>` +
+      (failed.length ? `\n\nFailed chats:\n${failed.slice(0, 20).join("\n")}` : ""),
+  );
+}
+
 async function handleAdminCommand(
   supabase: ReturnType<typeof db>,
   chatId: number,
