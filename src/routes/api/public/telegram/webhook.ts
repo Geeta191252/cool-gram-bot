@@ -339,11 +339,15 @@ async function tg(method: string, payload: unknown) {
 
 
 
+const SUPPORT_BOT = "CoolGramSupport_bot";
+const SUPPORT_LINK = `https://t.me/${SUPPORT_BOT}`;
+
 const MAIN_KEYBOARD = {
   keyboard: [
     [{ text: "💰 Earnings" }, { text: "📢 Promote" }],
     [{ text: "💸 Withdrawal" }, { text: "⭐ Deposit" }],
     [{ text: "👛 Wallet" }, { text: "📊 Bots and Statistics" }],
+    [{ text: "🆘 Cool Gram Support" }],
     [{ text: "🔗 Useful Links" }],
   ],
   resize_keyboard: true,
