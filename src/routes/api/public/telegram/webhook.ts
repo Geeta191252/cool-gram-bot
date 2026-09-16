@@ -766,6 +766,22 @@ async function showTask(
   const cat = subtype ? `${category}|${subtype}` : (category ?? "");
   const isViews = category === "views";
 
+  // Repair old private-chat links (t.me/c/...) which Telegram cannot open.
+  if (category === "channels" || category === "groups" || category === "boost") {
+    await Promise.all(
+      slice.map(async (ad: any) => {
+        if (!isBrokenJoinLink(ad.link)) return;
+        const ref = chatRefFromAd(ad);
+        const fixed = await joinableLink(ref);
+        if (!fixed || fixed === ad.link) return;
+        ad.link = fixed;
+        await supabase.from("cg_ads").update({ link: fixed }).eq("id", ad.id);
+      }),
+    );
+  }
+
+
+
   const rows: any[] = slice.map((ad) =>
     isViews
       ? [
