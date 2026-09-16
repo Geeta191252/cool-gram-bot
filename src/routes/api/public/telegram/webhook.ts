@@ -782,7 +782,18 @@ async function showTask(
 
 
 
-  const rows: any[] = slice.map((ad) =>
+  const shown = slice.filter((ad: any) => isViews || !isBrokenJoinLink(ad.link));
+  if (!shown.length) {
+    await send(
+      chatId,
+      "😴 <b>No tasks available in this category right now.</b>\n\nCome back a bit later — new tasks are added every day.",
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: backCb }]] } },
+    );
+    return;
+  }
+
+  const rows: any[] = shown.map((ad) =>
+
     isViews
       ? [
           {
