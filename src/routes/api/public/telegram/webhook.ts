@@ -1006,17 +1006,6 @@ async function askChatPicker(
             },
           },
         ],
-        [
-          {
-            text: "🌐 I'm not an admin",
-            request_chat: {
-              request_id: 2,
-              chat_is_channel: isChannel,
-              request_title: true,
-              request_username: true,
-            },
-          },
-        ],
         [{ text: "🔙 Back" }],
       ],
       resize_keyboard: true,
@@ -1432,30 +1421,43 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
   );
   if (botId && shared?.chat_id) {
     const chk: any = await tg("getChatMember", { chat_id: shared.chat_id, user_id: botId });
-    const st = chk?.result?.status;
-    // Only block when Telegram clearly says the bot is not inside the chat.
-    const clearlyOutside = chk?.ok === true && ["left", "kicked"].includes(st);
-    if (clearlyOutside) {
+    const st = String(chk?.result?.status ?? "");
+    const isAdmin = ["administrator", "creator"].includes(st);
+    if (!isAdmin) {
+      const isCh = category === "channels" || category.startsWith("boost_ch");
+      const bot = await botUsername();
       await send(
         chatId,
-        `\u274c <b>Cool Gram is not added to ${shared.title ?? "that chat"}.</b>\n\n` +
-          `1. Open that chat \u2192 Administrators \u2192 Add admin\n` +
-          `2. Add <b>@CoolGram_bot</b>\n` +
-          `3. Come back and select the chat again.`,
+        `🔒 <b>Cool Gram must be an admin in ${shared.title ?? "that chat"} first.</b>\n\n` +
+          `You can only promote a ${isCh ? "channel" : "group"} where <b>@${bot}</b> is an administrator.\n\n` +
+          `1. Tap the button below (or open the chat → Administrators → Add admin)\n` +
+          `2. Add <b>@${bot}</b> and keep all suggested permissions on\n` +
+          `3. You will come back here automatically and the setup will continue.`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "➕ Make Cool Gram admin",
+                  url: `https://t.me/${bot}?${isCh ? "startchannel" : "startgroup"}&admin=${adminDeepLinkRights(isCh)}`,
+                },
+              ],
+            ],
+          },
+        },
       );
-      const isCh = category === "channels" || category.startsWith("boost_ch");
-      if (category.startsWith("boost_")) await showBoostTypeMenu(supabase, chatId);
-      else await askChatPicker(supabase, chatId, category, isCh);
+      await supabase
+        .from("cg_users")
+        .update({ pending_action: `pick:${category}` })
+        .eq("tg_id", chatId);
       return;
     }
-    if (["administrator", "creator"].includes(String(st))) {
-      await recordBotChat(
-        supabase,
-        { id: shared.chat_id, title: shared.title, username: shared.username },
-        String(st),
-        chatId,
-      );
-    }
+    await recordBotChat(
+      supabase,
+      { id: shared.chat_id, title: shared.title, username: shared.username },
+      st,
+      chatId,
+    );
   }
 
 
