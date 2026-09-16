@@ -2,6 +2,12 @@ import http from "node:http";
 import { handleUpdate, deriveSecret, safeEqual } from "./handler.js";
 import { runBoostReminders, runLeaveCheck, runAutoApprove } from "./crons.js";
 import { getDb } from "./mongo.js";
+import {
+  handleSupportUpdate,
+  supportEnabled,
+  supportToken,
+  SUPPORT_WEBHOOK_PATH,
+} from "./support.js";
 
 const PORT = Number(process.env["PORT"] ?? 8000);
 const WEBHOOK_PATH = process.env["WEBHOOK_PATH"] ?? "/telegram/webhook";
