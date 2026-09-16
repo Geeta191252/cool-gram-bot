@@ -108,7 +108,7 @@ async function registerSupportWebhook() {
     body: JSON.stringify({
       url: `${PUBLIC_URL}${SUPPORT_WEBHOOK_PATH}`,
       secret_token: deriveSecret(token),
-      allowed_updates: ["message", "edited_message"],
+      allowed_updates: ["message", "edited_message", "callback_query"],
       drop_pending_updates: false,
       max_connections: 40,
     }),

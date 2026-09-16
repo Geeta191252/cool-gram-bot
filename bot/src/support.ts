@@ -5,6 +5,12 @@ const OWNER_TG = Number(process.env["SUPPORT_OWNER_TG"] ?? process.env["OWNER_TG
 
 export const SUPPORT_WEBHOOK_PATH = process.env["SUPPORT_WEBHOOK_PATH"] ?? "/support/webhook";
 
+const INTRO_VIDEO_URL =
+  "https://project--df5c0224-0a9b-491a-a8d1-60dc4387ca37-dev.lovable.app/__l5e/assets-v1/44cc983b-29b2-4358-a478-976fbd96ea23/coolgram-intro-v2.mp4";
+
+const SPONSOR_CHANNEL = "@CoolGramAdvertise";
+const SPONSOR_LINK = "https://t.me/CoolGramAdvertise";
+
 async function tg(method: string, payload: Record<string, unknown>) {
   if (!TOKEN) return null;
   try {
@@ -39,7 +45,73 @@ function displayName(from: any) {
   return from?.username ? `${name} (@${from.username})` : name;
 }
 
+async function isSponsorMember(userId: number): Promise<boolean> {
+  try {
+    const res: any = await tg("getChatMember", { chat_id: SPONSOR_CHANNEL, user_id: userId });
+    const status = res?.result?.status;
+    return Boolean(res?.ok && ["member", "administrator", "creator", "restricted"].includes(status));
+  } catch {
+    return false;
+  }
+}
+
+async function sponsorPrompt(chatId: number) {
+  await tg("sendMessage", {
+    chat_id: chatId,
+    text: `🔒 <b>Join our channel first</b>\n\nTo contact Cool Gram Support, please join our channel ${SPONSOR_CHANNEL}, then tap "✅ I joined".`,
+    parse_mode: "HTML",
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "📢 Join channel", url: SPONSOR_LINK }],
+        [{ text: "✅ I joined", callback_data: "chkjoin" }],
+      ],
+    },
+  });
+}
+
+async function sendStart(chatId: number, firstName?: string) {
+  const caption =
+    `👋 <b>${firstName ?? "friend"}, welcome to Cool Gram Support!</b>\n\n` +
+    `Describe your problem here — you can send a message, a photo or a video.\n\n` +
+    `Our team reads everything and will reply to you in this chat.`;
+  const video: any = await tg("sendVideo", {
+    chat_id: chatId,
+    video: INTRO_VIDEO_URL,
+    caption,
+    parse_mode: "HTML",
+  });
+  if (!video?.ok) {
+    await tg("sendMessage", { chat_id: chatId, text: caption, parse_mode: "HTML" });
+  }
+}
+
 export async function handleSupportUpdate(update: any) {
+  // Join-gate verification button
+  const cb = update?.callback_query;
+  if (cb) {
+    const cbChatId = Number(cb.message?.chat?.id ?? cb.from?.id);
+    const userId = Number(cb.from?.id);
+    if (cb.data === "chkjoin" && cbChatId) {
+      const ok = await isSponsorMember(userId);
+      if (ok) {
+        await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "✅ Verified!" });
+        await tg("sendMessage", {
+          chat_id: cbChatId,
+          text: "✅ Thanks for joining! You can now send your message, photo or video to Cool Gram Support.",
+        });
+      } else {
+        await tg("answerCallbackQuery", {
+          callback_query_id: cb.id,
+          text: "❌ You have not joined the channel yet.",
+          show_alert: true,
+        });
+      }
+    } else {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id });
+    }
+    return;
+  }
+
   const msg = update?.message ?? update?.edited_message;
   if (!msg?.chat?.id) return;
   const chatId = Number(msg.chat.id);
@@ -81,12 +153,16 @@ export async function handleSupportUpdate(update: any) {
   }
 
   if (text.startsWith("/start")) {
-    await tg("sendMessage", {
-      chat_id: chatId,
-      text:
-        "🆘 <b>Cool Gram Support</b>\n\nDescribe your problem here — you can send a message, a photo or a video.\n\nOur team reads everything and will reply to you in this chat.",
-      parse_mode: "HTML",
-    });
+    await sendStart(chatId, msg.from?.first_name);
+    if (!(await isSponsorMember(chatId))) {
+      await sponsorPrompt(chatId);
+    }
+    return;
+  }
+
+  // Gate: user must be in the sponsor channel before sending anything
+  if (!(await isSponsorMember(chatId))) {
+    await sponsorPrompt(chatId);
     return;
   }
 
