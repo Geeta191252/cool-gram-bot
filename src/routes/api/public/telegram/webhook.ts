@@ -2562,7 +2562,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
   const fromId = Number(cb.from?.id ?? chatId);
 
   if (data === "chkjoin") {
-    if (await isSponsorMember(fromId)) {
+    if (await isSponsorMember(fromId, true)) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "✅ Verified!" });
       await send(chatId, "✅ Thanks for joining! You can use Cool Gram now.", {
         reply_markup: MAIN_KEYBOARD,
