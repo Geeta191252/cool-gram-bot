@@ -483,18 +483,18 @@ const BOT_SUBTYPES: { key: string; label: string; title: string; desc: string }[
 async function showBotSubcategories(supabase: ReturnType<typeof db>, chatId: number) {
   const { data: ads } = await supabase
     .from("cg_ads")
-    .select("id, subtype, reward, budget_left")
+    .select("id, subtype, reward, budget_left, link, src_chat")
     .eq("is_active", true)
     .eq("category", "bots")
     .neq("owner_tg", chatId);
-  const { data: doneB } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
-  const doneSetB = new Set(((doneB ?? []) as any[]).map((d) => String(d.ad_id)));
+  const f = await taskFilters(supabase, chatId);
   const counts: Record<string, number> = {};
   for (const a of (ads ?? []) as any[]) {
-    if (doneSetB.has(String(a.id)) || a.budget_left < a.reward) continue;
+    if (!f.isAvailable(a)) continue;
     const k = a.subtype ?? "plain";
     counts[k] = (counts[k] ?? 0) + 1;
   }
+
   const body = BOT_SUBTYPES.map(
     (s) => `${s.title} — ${(counts[s.key] ?? 0).toLocaleString("en-US")}\n${s.desc}`,
   ).join("\n\n");
