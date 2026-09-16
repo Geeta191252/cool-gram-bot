@@ -527,14 +527,13 @@ const PAGE_SIZE = 10;
 
 // Shared availability filter so category counts and the task list always agree.
 async function taskFilters(supabase: ReturnType<typeof db>, chatId: number) {
-  const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
+  const [{ data: done }, { data: proofs }] = await Promise.all([
+    supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId),
+    supabase.from("cg_proofs").select("ad_id, status").eq("tg_id", chatId),
+  ]);
   const doneIds = ((done ?? []) as any[]).map((d) => d.ad_id);
   const doneSet = new Set(doneIds.map(String));
 
-  const { data: proofs } = await supabase
-    .from("cg_proofs")
-    .select("ad_id, status")
-    .eq("tg_id", chatId);
   const pendingSet = new Set(
     ((proofs ?? []) as any[])
       .filter((p) => ["pending", "approved", "auto_approved"].includes(String(p.status)))
