@@ -1797,7 +1797,9 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/deposits</code> — last Stars deposits\n` +
       `<code>/setprice withdraw &lt;amount&gt;</code> — minimum withdrawal\n` +
       `<code>/withdrawoff</code> / <code>/withdrawon</code> — close or open withdrawals\n` +
-      `<code>/withdrawstatus</code> — current withdrawal status\n\n` +
+      `<code>/withdrawstatus</code> — current withdrawal status\n` +
+      `<code>/chats</code> — every channel/group where the bot is admin\n` +
+      `<code>/broadcast</code> — send any message (text/photo/video) to all those chats\n\n` +
       `Examples:\n<code>/setprice channel 800</code>\n<code>/setprice group 600</code>\n<code>/setprice views 30</code>\n<code>/setprice bot 900</code>\n<code>/setprice premium 1400</code> — bot start, Premium-only audience\n<code>/setprice premium_cond 4000</code> — bot + conditions, Premium-only\n<code>/setprice reactions 25</code>\n<code>/setprice referral 600</code>`,
   );
 }
