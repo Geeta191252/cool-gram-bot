@@ -1762,6 +1762,28 @@ async function handleAdminCommand(
     return true;
   }
 
+  if (cmd === "/withdrawoff" || cmd === "/withdrawon" || cmd === "/withdrawstatus") {
+    if (cmd === "/withdrawstatus") {
+      await send(
+        chatId,
+        `💸 Withdrawals are currently <b>${withdrawOpen() ? "OPEN" : "CLOSED"}</b>.\nMinimum: <b>${cfg("min_withdraw").toLocaleString("en-US")} ${COIN}</b>\n\n<code>/withdrawoff</code> — close\n<code>/withdrawon</code> — open\n<code>/setprice withdraw 50000</code> — minimum amount`,
+      );
+      return true;
+    }
+    const open = cmd === "/withdrawon" ? 1 : 0;
+    await supabase
+      .from("cg_settings")
+      .upsert({ key: "withdraw_open", value: open, updated_at: new Date().toISOString() });
+    settingsMap["withdraw_open"] = open;
+    await send(
+      chatId,
+      open
+        ? "✅ Withdrawals are now <b>OPEN</b> for all users."
+        : "🚧 Withdrawals are now <b>CLOSED</b>. Users will see: “Withdrawals are temporarily closed. They will open again soon.”",
+    );
+    return true;
+  }
+
   if (cmd === "/setprice") {
     const key = settingKey(args[0] ?? "");
     const value = Number(String(args[1] ?? "").replace(/[, _]/g, ""));
