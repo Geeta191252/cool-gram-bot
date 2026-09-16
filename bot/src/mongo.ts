@@ -9,6 +9,7 @@ const UNIQUE: Record<string, string[]> = {
   cg_settings: ["key"],
   cg_boost_claims: ["ad_id", "tg_id"],
   cg_proofs: ["ad_id", "tg_id"],
+  cg_bot_chats: ["chat_id"],
 };
 
 type DefaultMap = Record<string, unknown | (() => unknown)>;
