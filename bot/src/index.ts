@@ -96,6 +96,26 @@ async function registerWebhook() {
   console.log("setWebhook:", await res.text());
 }
 
+async function registerSupportWebhook() {
+  if (!PUBLIC_URL || !supportEnabled()) {
+    console.warn("PUBLIC_URL or SUPPORT_BOT_TOKEN missing — skipping support setWebhook");
+    return;
+  }
+  const token = supportToken();
+  const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      url: `${PUBLIC_URL}${SUPPORT_WEBHOOK_PATH}`,
+      secret_token: deriveSecret(token),
+      allowed_updates: ["message", "edited_message"],
+      drop_pending_updates: false,
+      max_connections: 40,
+    }),
+  });
+  console.log("support setWebhook:", await res.text());
+}
+
 function scheduleJob(name: string, everyMs: number, job: () => Promise<unknown>) {
   const run = async () => {
     try {
