@@ -1025,11 +1025,77 @@ async function askChatPicker(
   });
 }
 
+// Every admin right except the owner-only ones (promote members / anonymous).
+function fullBotRights(isChannel: boolean) {
+  return {
+    is_anonymous: false,
+    can_promote_members: false,
+    can_manage_chat: true,
+    can_change_info: true,
+    can_delete_messages: true,
+    can_invite_users: true,
+    can_restrict_members: true,
+    can_manage_video_chats: true,
+    can_post_stories: true,
+    can_edit_stories: true,
+    can_delete_stories: true,
+    ...(isChannel
+      ? { can_post_messages: true, can_edit_messages: true }
+      : { can_pin_messages: true, can_manage_topics: true }),
+  };
+}
+
+function adminDeepLinkRights(isChannel: boolean) {
+  const base = [
+    "manage_chat",
+    "change_info",
+    "delete_messages",
+    "invite_users",
+    "restrict_members",
+    "manage_video_chats",
+    "post_stories",
+    "edit_stories",
+    "delete_stories",
+  ];
+  const extra = isChannel
+    ? ["post_messages", "edit_messages"]
+    : ["pin_messages", "manage_topics"];
+  return [...base, ...extra].join("+");
+}
+
+async function recordBotChat(
+  supabase: ReturnType<typeof db>,
+  chat: any,
+  status: string,
+  addedBy?: number | null,
+) {
+  if (!chat?.id) return;
+  const active = ["administrator", "creator"].includes(status);
+  if (active) {
+    await supabase.from("cg_bot_chats").upsert(
+      {
+        chat_id: Number(chat.id),
+        title: chat.title ?? chat.username ?? String(chat.id),
+        username: chat.username ?? null,
+        type: chat.type ?? null,
+        status,
+        added_by: addedBy ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "chat_id" },
+    );
+  } else {
+    await supabase.from("cg_bot_chats").delete().eq("chat_id", Number(chat.id));
+  }
+}
+
 async function handleBotMembershipUpdate(supabase: ReturnType<typeof db>, membership: any) {
   const userId = Number(membership?.from?.id);
   const chat = membership?.chat;
   const status = String(membership?.new_chat_member?.status ?? "");
+  await recordBotChat(supabase, chat, status, userId || null);
   if (!userId || !chat?.id || !["administrator", "creator"].includes(status)) return;
+
 
   const { data: user } = await supabase
     .from("cg_users")
