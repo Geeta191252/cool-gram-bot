@@ -2931,7 +2931,13 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       worker,
       `✅ <b>Your proof was approved!</b>\n\nTask: <b>${(ad as any).title}</b>\n+${reward.toLocaleString("en-US")} ${COIN} credited.\n💰 Balance: ${newBal.toLocaleString("en-US")} ${COIN}`,
     );
+    await supabase
+      .from("cg_proofs")
+      .update({ status: "approved", resolved_at: new Date().toISOString() })
+      .eq("ad_id", adId)
+      .eq("tg_id", worker);
     await send(chatId, `✅ Proof approved for <b>${(ad as any).title}</b> — ${reward.toLocaleString("en-US")} ${COIN} paid.`);
+
     return;
   }
 
