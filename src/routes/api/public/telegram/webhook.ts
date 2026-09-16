@@ -2007,6 +2007,11 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
   }
 
   if (user?.pending_action === "withdraw" && /^\d+$/.test(text.trim())) {
+    if (!withdrawOpen()) {
+      await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+      await send(chatId, WITHDRAW_CLOSED_MSG);
+      return;
+    }
     const amount = Number(text.trim());
     const min = cfg("min_withdraw");
     if (amount < min) {
