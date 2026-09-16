@@ -1006,17 +1006,6 @@ async function askChatPicker(
             },
           },
         ],
-        [
-          {
-            text: "🌐 I'm not an admin",
-            request_chat: {
-              request_id: 2,
-              chat_is_channel: isChannel,
-              request_title: true,
-              request_username: true,
-            },
-          },
-        ],
         [{ text: "🔙 Back" }],
       ],
       resize_keyboard: true,
