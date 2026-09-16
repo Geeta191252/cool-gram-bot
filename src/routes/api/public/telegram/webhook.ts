@@ -33,14 +33,21 @@ const OWNER_USERNAME = "Hidden_Xman";
 const SPONSOR_CHANNEL = "@CoolGramAdvertise";
 const SPONSOR_LINK = "https://t.me/CoolGramAdvertise";
 
-async function isSponsorMember(userId: number): Promise<boolean> {
+const sponsorCache = new Map<number, { ok: boolean; at: number }>();
+const SPONSOR_TTL = 10 * 60 * 1000;
+
+async function isSponsorMember(userId: number, force = false): Promise<boolean> {
+  const hit = sponsorCache.get(userId);
+  if (!force && hit && Date.now() - hit.at < SPONSOR_TTL) return hit.ok;
   const res = await tg("getChatMember", { chat_id: SPONSOR_CHANNEL, user_id: userId });
   // If the bot cannot read the channel (not an admin there), do not block anyone.
   if (!res?.ok) return true;
   const status = res.result?.status;
-  if (status === "left" || status === "kicked") return false;
-  return true;
+  const ok = !(status === "left" || status === "kicked");
+  sponsorCache.set(userId, { ok, at: Date.now() });
+  return ok;
 }
+
 
 
 function sponsorPrompt() {
