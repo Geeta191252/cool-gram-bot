@@ -486,12 +486,15 @@ const CATEGORIES: { key: string; label: string }[] = [
 ];
 
 async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
-  const { data: ads } = await supabase
-    .from("cg_ads")
-    .select("id, category, reward, budget_left, link, src_chat")
-    .eq("is_active", true)
-    .neq("owner_tg", chatId);
-  const f = await taskFilters(supabase, chatId);
+  const [{ data: ads }, f] = await Promise.all([
+    supabase
+      .from("cg_ads")
+      .select("id, category, reward, budget_left, link, src_chat")
+      .eq("is_active", true)
+      .neq("owner_tg", chatId),
+    taskFilters(supabase, chatId),
+  ]);
+
   const available = await dropJoinedAds(
     ((ads ?? []) as any[]).filter((a) => f.isAvailable(a)),
     chatId,
