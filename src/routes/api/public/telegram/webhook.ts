@@ -29,6 +29,39 @@ function db() {
 const OWNER_TG = 6965488457;
 const OWNER_USERNAME = "Hidden_Xman";
 
+// ---------------- Mandatory sponsor channel ----------------
+const SPONSOR_CHANNEL = "@CoolGramAdvertise";
+const SPONSOR_LINK = "https://t.me/CoolGramAdvertise";
+
+async function isSponsorMember(userId: number): Promise<boolean> {
+  const res = await tg("getChatMember", { chat_id: SPONSOR_CHANNEL, user_id: userId });
+  if (!res?.ok) return false;
+  const status = res.result?.status;
+  return ["member", "administrator", "creator", "restricted"].includes(status);
+}
+
+function sponsorPrompt() {
+  return {
+    text:
+      "🔒 <b>Join our channel to use Cool Gram</b>\n\n" +
+      `Please join ${SPONSOR_LINK} and then press <b>✅ I joined</b> to continue.`,
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "📢 Join channel", url: SPONSOR_LINK }],
+        [{ text: "✅ I joined", callback_data: "chkjoin" }],
+      ],
+    },
+  };
+}
+
+async function sponsorGate(userId: number, chatId: number): Promise<boolean> {
+  if (userId === OWNER_TG) return true;
+  if (await isSponsorMember(userId)) return true;
+  const p = sponsorPrompt();
+  await send(chatId, p.text, { reply_markup: p.reply_markup });
+  return false;
+}
+
 const SETTINGS: Record<string, { def: number; label: string }> = {
   min_channel: { def: 750, label: "Channel subscriber min price" },
   min_group: { def: 600, label: "Group join min price" },
