@@ -90,8 +90,17 @@ async function ensureIndexes(db: Db) {
       .catch(() => undefined);
   }
   await db.collection("cg_ads").createIndex({ is_active: 1, category: 1 }).catch(() => undefined);
+  await db.collection("cg_ads").createIndex({ owner_tg: 1 }).catch(() => undefined);
   await db.collection("cg_completions").createIndex({ tg_id: 1 }).catch(() => undefined);
-  await db.collection("cg_transactions").createIndex({ tg_id: 1, created_at: -1 }).catch(() => undefined);
+  await db.collection("cg_completions").createIndex({ ad_id: 1, tg_id: 1 }).catch(() => undefined);
+  await db.collection("cg_proofs").createIndex({ tg_id: 1 }).catch(() => undefined);
+  await db.collection("cg_proofs").createIndex({ status: 1, created_at: 1 }).catch(() => undefined);
+  await db.collection("cg_boost_claims").createIndex({ status: 1, last_claim_at: 1 }).catch(() => undefined);
+  await db.collection("cg_withdrawals").createIndex({ status: 1, created_at: -1 }).catch(() => undefined);
+  await db
+    .collection("cg_transactions")
+    .createIndex({ tg_id: 1, created_at: -1 })
+    .catch(() => undefined);
   await db
     .collection("cg_telegram_updates")
     .createIndex({ created_at: 1 }, { expireAfterSeconds: 86400 })
