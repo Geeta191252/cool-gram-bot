@@ -1391,6 +1391,7 @@ async function createCampaign(
     category: info.category,
     src_chat: info.src_chat ?? null,
     src_msg: info.src_msg ?? null,
+    conditions: info.conditions ?? null,
     subtype:
       info.category === "bots"
         ? info.conditions
