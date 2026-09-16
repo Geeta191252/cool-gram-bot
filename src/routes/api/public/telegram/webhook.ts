@@ -1705,7 +1705,8 @@ async function handleProofPhoto(
     `Task: <b>${(ad as any).title}</b>\n` +
     `Conditions: ${(ad as any).conditions ?? "-"}\n` +
     `Worker: ${uname} (<code>${chatId}</code>)\n` +
-    `Reward: <b>${Number((ad as any).reward).toLocaleString("en-US")} ${COIN}</b>`;
+    `Reward: <b>${Number((ad as any).reward).toLocaleString("en-US")} ${COIN}</b>\n\n` +
+    `\u26a0\ufe0f <b>Warning:</b> If the worker has completed the conditions and you still reject the proof, a penalty of <b>${Number((ad as any).reward).toLocaleString("en-US")} ${COIN}</b> will be deducted from your balance. Reject only if the proof is fake or incomplete.`;
   const markup = {
     inline_keyboard: [
       [
