@@ -389,11 +389,15 @@ async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
     .eq("is_active", true)
     .neq("owner_tg", chatId);
   const f = await taskFilters(supabase, chatId);
+  const available = await dropJoinedAds(
+    ((ads ?? []) as any[]).filter((a) => f.isAvailable(a)),
+    chatId,
+  );
   const counts: Record<string, number> = {};
-  for (const a of (ads ?? []) as any[]) {
-    if (!f.isAvailable(a)) continue;
+  for (const a of available) {
     counts[a.category] = (counts[a.category] ?? 0) + 1;
   }
+
 
 
   const rows: any[] = [];
