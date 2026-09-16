@@ -1002,12 +1002,7 @@ async function askChatPicker(
                 can_invite_users: true,
                 ...(isChannel ? { can_post_messages: true } : {}),
               },
-              bot_administrator_rights: {
-                is_anonymous: false,
-                can_manage_chat: true,
-                can_invite_users: true,
-                ...(isChannel ? { can_post_messages: true } : {}),
-              },
+              bot_administrator_rights: fullBotRights(isChannel),
             },
           },
         ],
