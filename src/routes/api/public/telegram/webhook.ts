@@ -125,6 +125,33 @@ function chatRefFromAd(ad: any): string | number | null {
   return null;
 }
 
+// t.me/c/... links are not joinable. Build a real invite link for private chats.
+async function joinableLink(
+  chatId: number | string | null | undefined,
+  username?: string | null,
+): Promise<string | null> {
+  if (username) return `https://t.me/${username}`;
+  if (!chatId) return null;
+  const created: any = await tg("createChatInviteLink", {
+    chat_id: chatId,
+    name: "Cool Gram",
+    creates_join_request: false,
+  });
+  if (created?.ok && created.result?.invite_link) return created.result.invite_link;
+  const exported: any = await tg("exportChatInviteLink", { chat_id: chatId });
+  if (exported?.ok && typeof exported.result === "string") return exported.result;
+  const info: any = await tg("getChat", { chat_id: chatId });
+  if (info?.ok && info.result?.username) return `https://t.me/${info.result.username}`;
+  if (info?.ok && info.result?.invite_link) return info.result.invite_link;
+  return null;
+}
+
+function isBrokenJoinLink(link: string | null | undefined): boolean {
+  return !link || /t\.me\/c\//.test(link);
+}
+
+
+
 
 function verifyBlocked(res: any): boolean {
   const d = String(res?.description ?? "").toLowerCase();
@@ -739,7 +766,34 @@ async function showTask(
   const cat = subtype ? `${category}|${subtype}` : (category ?? "");
   const isViews = category === "views";
 
-  const rows: any[] = slice.map((ad) =>
+  // Repair old private-chat links (t.me/c/...) which Telegram cannot open.
+  if (category === "channels" || category === "groups" || category === "boost") {
+    await Promise.all(
+      slice.map(async (ad: any) => {
+        if (!isBrokenJoinLink(ad.link)) return;
+        const ref = chatRefFromAd(ad);
+        const fixed = await joinableLink(ref);
+        if (!fixed || fixed === ad.link) return;
+        ad.link = fixed;
+        await supabase.from("cg_ads").update({ link: fixed }).eq("id", ad.id);
+      }),
+    );
+  }
+
+
+
+  const shown = slice.filter((ad: any) => isViews || !isBrokenJoinLink(ad.link));
+  if (!shown.length) {
+    await send(
+      chatId,
+      "😴 <b>No tasks available in this category right now.</b>\n\nCome back a bit later — new tasks are added every day.",
+      { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: backCb }]] } },
+    );
+    return;
+  }
+
+  const rows: any[] = shown.map((ad) =>
+
     isViews
       ? [
           {
@@ -1231,9 +1285,10 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
 
 
   const title = shared.title ?? "My channel";
-  const link = shared.username
-    ? `https://t.me/${shared.username}`
-    : `https://t.me/c/${String(shared.chat_id).replace("-100", "")}`;
+  const link =
+    (await joinableLink(shared.chat_id, shared.username)) ??
+    `https://t.me/c/${String(shared.chat_id).replace("-100", "")}`;
+
 
   if (category.startsWith("boost_")) {
     if (!shared.username) {
