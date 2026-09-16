@@ -140,13 +140,22 @@ class QueryBuilder implements PromiseLike<Result> {
   private wantRows = false;
   private headMode = false;
   private countMode = false;
+  private projection: Record<string, 1> | undefined;
 
   constructor(private table: string) {}
 
-  select(_columns?: string, opts?: { count?: string; head?: boolean }) {
+  select(columns?: string, opts?: { count?: string; head?: boolean }) {
     if (this.op === "select") {
       if (opts?.count) this.countMode = true;
       if (opts?.head) this.headMode = true;
+      if (columns && !columns.includes("*") && !columns.includes("(")) {
+        const spec: Record<string, 1> = {};
+        for (const c of columns.split(",")) {
+          const name = c.trim();
+          if (name) spec[name] = 1;
+        }
+        if (Object.keys(spec).length) this.projection = spec;
+      }
     }
     this.wantRows = true;
     return this;
