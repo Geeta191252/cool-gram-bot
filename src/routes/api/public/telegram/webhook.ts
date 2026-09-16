@@ -562,17 +562,30 @@ async function taskFilters(supabase: ReturnType<typeof db>, chatId: number) {
 }
 
 // Hide join tasks for chats the user is already a member of (even from long ago).
+const memberCache = new Map<string, { joined: boolean; at: number }>();
+const MEMBER_TTL = 5 * 60 * 1000;
+
+async function isChatMemberCached(ref: string, userId: number) {
+  const key = `${userId}:${ref}`;
+  const hit = memberCache.get(key);
+  if (hit && Date.now() - hit.at < MEMBER_TTL) return hit.joined;
+  const res: any = await tg("getChatMember", { chat_id: ref, user_id: userId });
+  const st = res?.result?.status;
+  const joined =
+    res?.ok === true && ["member", "administrator", "creator", "restricted"].includes(st);
+  if (res?.ok === true) memberCache.set(key, { joined, at: Date.now() });
+  return joined;
+}
+
 async function dropJoinedAds(ads: any[], chatId: number) {
   const joinKinds = new Set(["channels", "groups", "boost"]);
-  const targets = ads.filter((a) => joinKinds.has(String(a.category ?? ""))).slice(0, 40);
+  const targets = ads.filter((a) => joinKinds.has(String(a.category ?? ""))).slice(0, 20);
   if (!targets.length) return ads;
   const checks = await Promise.all(
     targets.map(async (a) => {
       const ref = chatRefFromAd(a);
       if (!ref) return false;
-      const res: any = await tg("getChatMember", { chat_id: ref, user_id: chatId });
-      const st = res?.result?.status;
-      return res?.ok === true && ["member", "administrator", "creator", "restricted"].includes(st);
+      return isChatMemberCached(String(ref), chatId);
     }),
   );
   const joined = new Set(targets.filter((_, i) => checks[i]).map((a) => String(a.id)));
