@@ -2775,6 +2775,44 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
         { reply_markup: { inline_keyboard: [[{ text: "📸 Send proof again", callback_data: `proof:${adId}` }]] } },
       );
       await send(chatId, `❌ Proof rejected for <b>${(ad as any).title}</b>.`);
+
+      // Penalty: if the advertiser (not the owner) rejects a proof, they are charged
+      // one reward amount — rejecting completed conditions costs coins.
+      const advertiser = Number((ad as any).owner_tg);
+      const penalty = Number((ad as any).reward);
+      if (chatId === advertiser && advertiser !== OWNER_TG && penalty > 0) {
+        const { data: au } = await supabase
+          .from("cg_users")
+          .select("balance")
+          .eq("tg_id", advertiser)
+          .maybeSingle();
+        const oldBal = Number((au as any)?.balance ?? 0);
+        const newBal = Math.max(0, oldBal - penalty);
+        await supabase.from("cg_users").update({ balance: newBal }).eq("tg_id", advertiser);
+        await supabase.from("cg_transactions").insert({
+          tg_id: advertiser,
+          amount: -penalty,
+          reason: `Penalty: rejected proof for "${(ad as any).title}"`,
+        });
+        await send(
+          advertiser,
+          `⚠️ <b>Penalty applied</b>\n\n` +
+            `You rejected a proof for <b>${(ad as any).title}</b>.\n` +
+            `-${penalty.toLocaleString("en-US")} ${COIN} deducted from your balance.\n` +
+            `💰 Balance: ${newBal.toLocaleString("en-US")} ${COIN}\n\n` +
+            `If the worker had completed the conditions, approve the proof instead. Repeated unfair rejections may get your campaigns blocked.`,
+        );
+        if (OWNER_TG !== advertiser) {
+          await send(
+            OWNER_TG,
+            `⚠️ <b>Proof rejected by advertiser</b>\n\n` +
+              `Task: <b>${(ad as any).title}</b>\n` +
+              `Advertiser: <code>${advertiser}</code>\n` +
+              `Worker: <code>${worker}</code>\n` +
+              `Penalty: -${penalty.toLocaleString("en-US")} ${COIN} charged to the advertiser.`,
+          );
+        }
+      }
       return;
     }
 
