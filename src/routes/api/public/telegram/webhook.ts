@@ -2099,6 +2099,12 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       await send(chatId, "⚠️ Send it like this: <code>Reward | Budget</code>\nExample: <code>5 | 100</code>");
       return;
     }
+    const minReward = info.category === "reactions" ? cfg("min_reactions") : 1;
+    if (reward < minReward) {
+      await send(chatId, `⚠️ Minimum reward for this task type is <b>${minReward} ${COIN}</b>.`);
+      return;
+    }
+
     if (user.balance < budget) {
       await send(chatId, `❌ Insufficient balance. You have <b>${user.balance} ${COIN}</b>.`);
       return;
