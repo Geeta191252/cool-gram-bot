@@ -2855,7 +2855,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     const adId = data.slice(5);
     const { data: ad } = await supabase
       .from("cg_ads")
-      .select("id, title, reward, budget_left, is_active, category, link, src_chat, boost_days, owner_tg")
+      .select("id, title, reward, budget_left, is_active, category, link, src_chat, boost_days, owner_tg, conditions")
       .eq("id", adId)
       .maybeSingle();
 
@@ -2865,6 +2865,24 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       catEarly === "boost" ? boostDayReward(ad) : Number((ad as any)?.reward ?? 0);
     if (!ad || !(ad as any).is_active || (ad as any).budget_left < needed) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "This task is no longer available." });
+      return;
+    }
+
+    // Condition tasks never pay via Check — a proof photo must be sent first.
+    if ((ad as any).conditions) {
+      await tg("answerCallbackQuery", {
+        callback_query_id: cb.id,
+        text: "📸 This task needs a proof photo. Send it first.",
+        show_alert: true,
+      });
+      await send(
+        chatId,
+        `📸 <b>Photo proof required</b>\n\n` +
+          `Task: <b>${(ad as any).title}</b>\n` +
+          `Conditions: ${(ad as any).conditions}\n\n` +
+          `Complete all the conditions, take a screenshot, then send it here with the button below. Coins are credited only after the advertiser approves your photo.`,
+        { reply_markup: { inline_keyboard: [[{ text: "📸 Send proof", callback_data: `proof:${adId}` }]] } },
+      );
       return;
     }
 
