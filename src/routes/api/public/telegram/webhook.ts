@@ -2664,7 +2664,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "You have already completed this task." });
       return;
     }
-    await setPending(supabase, chatId, `proof:${adId}`, undefined);
+    await supabase.from("cg_users").update({ pending_action: `proof:${adId}` }).eq("tg_id", chatId);
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     await send(
       chatId,
