@@ -2157,7 +2157,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     await tg("answerCallbackQuery", { callback_query_id: cb.id });
     await send(
       chatId,
-      `📝 <b>Rules</b>\n\n1️⃣ Open the task, join the channel/group, then tap "I did it".\n2️⃣ Stay in every channel and group for at least 7 days. If you leave earlier, your whole balance is reset to 0.\n3️⃣ Each task counts only once.\n4️⃣ Cheating may reset your balance to zero.`,
+      `📝 <b>Rules</b>\n\n1️⃣ Open the task, join the channel/group, then tap "I did it".\n2️⃣ Stay in every channel and group, and keep every bot you started, for at least 7 days. If you leave, block or remove them earlier, a penalty equal to the full reward of that task is deducted from your balance.\n3️⃣ Each task counts only once per user — every campaign is shown to you a single time.\n4️⃣ Cheating may reset your balance to zero.`,
       { reply_markup: { inline_keyboard: [[{ text: "🔙 Back", callback_data: "earn" }]] } },
     );
     return;
