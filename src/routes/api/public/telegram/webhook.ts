@@ -113,7 +113,18 @@ const SETTING_ALIASES: Record<string, string> = {
   commission: "commission_pct",
   stars: "star_rate",
   withdraw: "min_withdraw",
+  min_withdrawal: "min_withdraw",
+  withdrawal: "min_withdraw",
+  withdraw_status: "withdraw_open",
+  withdrawals_open: "withdraw_open",
 };
+
+const WITHDRAW_CLOSED_MSG =
+  "🚧 <b>Withdrawals are temporarily closed.</b>\n\nThey will open again soon — please check back later. Keep earning in the meantime!";
+
+function withdrawOpen() {
+  return cfg("withdraw_open") !== 0;
+}
 
 function settingKey(raw: string): string | null {
   const k = (raw ?? "").trim().toLowerCase();
