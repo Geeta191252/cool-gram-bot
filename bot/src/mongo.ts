@@ -318,6 +318,7 @@ class QueryBuilder implements PromiseLike<Result> {
       }
 
       let cursor = col.find(this.filter());
+      if (this.projection) cursor = cursor.project(this.projection) as typeof cursor;
       if (this.sortSpec) cursor = cursor.sort(this.sortSpec);
       if (this.limitN !== undefined) cursor = cursor.limit(this.limitN);
       const rows = this.shape(await cursor.toArray());
