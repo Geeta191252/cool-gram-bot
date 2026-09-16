@@ -1706,7 +1706,7 @@ async function handleProofPhoto(
     `Conditions: ${(ad as any).conditions ?? "-"}\n` +
     `Worker: ${uname} (<code>${chatId}</code>)\n` +
     `Reward: <b>${Number((ad as any).reward).toLocaleString("en-US")} ${COIN}</b>\n\n` +
-    `\u26a0\ufe0f <b>Warning:</b> If the worker has completed the conditions and you still reject the proof, a penalty of <b>${Number((ad as any).reward).toLocaleString("en-US")} ${COIN}</b> will be deducted from your balance. Reject only if the proof is fake or incomplete.`;
+    `\u26a0\ufe0f <b>Warning:</b> Reject only if the proof is fake or incomplete. Every rejection is reviewed by the admin, and if the worker had really completed the conditions a penalty of <b>${Number((ad as any).reward).toLocaleString("en-US")} ${COIN}</b> can be deducted from your balance.`;
   const markup = {
     inline_keyboard: [
       [
@@ -2738,6 +2738,61 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+  if (data.startsWith("ppen:") || data.startsWith("pnop:")) {
+    const applyPenalty = data.startsWith("ppen:");
+    const [, adIdRaw, workerRaw] = data.split(":");
+    const adId = adIdRaw ?? "";
+    const worker = Number(workerRaw);
+    if (chatId !== OWNER_TG) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Not allowed.", show_alert: true });
+      return;
+    }
+    const { data: ad } = await supabase
+      .from("cg_ads")
+      .select("id, title, reward, owner_tg")
+      .eq("id", adId)
+      .maybeSingle();
+    if (!ad) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Task not found." });
+      return;
+    }
+    const advertiser = Number((ad as any).owner_tg);
+    const penalty = Number((ad as any).reward);
+    if (!applyPenalty) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "No penalty applied." });
+      await send(chatId, `✅ No penalty applied for <b>${(ad as any).title}</b>.`);
+      return;
+    }
+    const { data: au } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", advertiser)
+      .maybeSingle();
+    const oldBal = Number((au as any)?.balance ?? 0);
+    const newBal = Math.max(0, oldBal - penalty);
+    await supabase.from("cg_users").update({ balance: newBal }).eq("tg_id", advertiser);
+    await supabase.from("cg_transactions").insert({
+      tg_id: advertiser,
+      amount: -penalty,
+      reason: `Penalty: unfair proof rejection for "${(ad as any).title}"`,
+    });
+    await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Penalty applied." });
+    await send(
+      chatId,
+      `⚠️ Penalty of ${penalty.toLocaleString("en-US")} ${COIN} charged to <code>${advertiser}</code> for <b>${(ad as any).title}</b>.`,
+    );
+    await send(
+      advertiser,
+      `⚠️ <b>Penalty applied</b>\n\n` +
+        `Admin reviewed your rejected proof for <b>${(ad as any).title}</b> and found the worker had completed the conditions.\n` +
+        `-${penalty.toLocaleString("en-US")} ${COIN} deducted from your balance.\n` +
+        `💰 Balance: ${newBal.toLocaleString("en-US")} ${COIN}\n\n` +
+        `Reject a proof only when it is fake or incomplete. Repeated unfair rejections may get your campaigns blocked.`,
+    );
+    return;
+  }
+
+
   if (data.startsWith("papv:") || data.startsWith("prej:")) {
     const approve = data.startsWith("papv:");
     const [, adIdRaw, workerRaw] = data.split(":");
@@ -2776,45 +2831,34 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       );
       await send(chatId, `❌ Proof rejected for <b>${(ad as any).title}</b>.`);
 
-      // Penalty: if the advertiser (not the owner) rejects a proof, they are charged
-      // one reward amount — rejecting completed conditions costs coins.
+      // No automatic penalty. The rejection goes to the admin for review;
+      // only the admin can decide to charge the advertiser.
       const advertiser = Number((ad as any).owner_tg);
       const penalty = Number((ad as any).reward);
       if (chatId === advertiser && advertiser !== OWNER_TG && penalty > 0) {
-        const { data: au } = await supabase
-          .from("cg_users")
-          .select("balance")
-          .eq("tg_id", advertiser)
-          .maybeSingle();
-        const oldBal = Number((au as any)?.balance ?? 0);
-        const newBal = Math.max(0, oldBal - penalty);
-        await supabase.from("cg_users").update({ balance: newBal }).eq("tg_id", advertiser);
-        await supabase.from("cg_transactions").insert({
-          tg_id: advertiser,
-          amount: -penalty,
-          reason: `Penalty: rejected proof for "${(ad as any).title}"`,
-        });
         await send(
-          advertiser,
-          `⚠️ <b>Penalty applied</b>\n\n` +
-            `You rejected a proof for <b>${(ad as any).title}</b>.\n` +
-            `-${penalty.toLocaleString("en-US")} ${COIN} deducted from your balance.\n` +
-            `💰 Balance: ${newBal.toLocaleString("en-US")} ${COIN}\n\n` +
-            `If the worker had completed the conditions, approve the proof instead. Repeated unfair rejections may get your campaigns blocked.`,
+          OWNER_TG,
+          `⚠️ <b>Proof rejected by advertiser — review needed</b>\n\n` +
+            `Task: <b>${(ad as any).title}</b>\n` +
+            `Advertiser: <code>${advertiser}</code>\n` +
+            `Worker: <code>${worker}</code>\n` +
+            `Reward: <b>${penalty.toLocaleString("en-US")} ${COIN}</b>\n\n` +
+            `Check the proof photo above. If the worker had completed the conditions, apply the penalty to the advertiser.`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: "⚠️ Apply penalty", callback_data: `ppen:${adId}:${worker}` },
+                  { text: "✅ Rejection was fair", callback_data: `pnop:${adId}:${worker}` },
+                ],
+              ],
+            },
+          },
         );
-        if (OWNER_TG !== advertiser) {
-          await send(
-            OWNER_TG,
-            `⚠️ <b>Proof rejected by advertiser</b>\n\n` +
-              `Task: <b>${(ad as any).title}</b>\n` +
-              `Advertiser: <code>${advertiser}</code>\n` +
-              `Worker: <code>${worker}</code>\n` +
-              `Penalty: -${penalty.toLocaleString("en-US")} ${COIN} charged to the advertiser.`,
-          );
-        }
       }
       return;
     }
+
 
     const reward = Number((ad as any).reward);
     if (!(ad as any).is_active || Number((ad as any).budget_left) < reward) {
