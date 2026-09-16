@@ -454,6 +454,26 @@ async function taskFilters(supabase: ReturnType<typeof db>, chatId: number) {
   };
 }
 
+// Hide join tasks for chats the user is already a member of (even from long ago).
+async function dropJoinedAds(ads: any[], chatId: number) {
+  const joinKinds = new Set(["channels", "groups", "boost"]);
+  const targets = ads.filter((a) => joinKinds.has(String(a.category ?? ""))).slice(0, 40);
+  if (!targets.length) return ads;
+  const checks = await Promise.all(
+    targets.map(async (a) => {
+      const ref = chatRefFromAd(a);
+      if (!ref) return false;
+      const res: any = await tg("getChatMember", { chat_id: ref, user_id: chatId });
+      const st = res?.result?.status;
+      return res?.ok === true && ["member", "administrator", "creator", "restricted"].includes(st);
+    }),
+  );
+  const joined = new Set(targets.filter((_, i) => checks[i]).map((a) => String(a.id)));
+  return joined.size ? ads.filter((a) => !joined.has(String(a.id))) : ads;
+}
+
+
+
 
 function actionVerb(category?: string) {
   if (category === "groups") return "Join";
