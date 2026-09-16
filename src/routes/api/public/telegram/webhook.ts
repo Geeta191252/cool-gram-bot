@@ -1448,7 +1448,16 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
       else await askChatPicker(supabase, chatId, category, isCh);
       return;
     }
+    if (["administrator", "creator"].includes(String(st))) {
+      await recordBotChat(
+        supabase,
+        { id: shared.chat_id, title: shared.title, username: shared.username },
+        String(st),
+        chatId,
+      );
+    }
   }
+
 
 
   const title = shared.title ?? "My channel";
