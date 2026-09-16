@@ -870,9 +870,8 @@ async function showTask(
     if (subtype === "plain") query = query.or("subtype.is.null,subtype.eq.plain");
     else query = query.eq("subtype", subtype);
   }
-  const { data: allAds } = await query;
+  const [{ data: allAds }, f] = await Promise.all([query, taskFilters(supabase, chatId)]);
 
-  const f = await taskFilters(supabase, chatId);
   let ads = ((allAds ?? []) as any[]).filter((a) => f.isAvailable(a));
 
 
