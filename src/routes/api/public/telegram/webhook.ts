@@ -1998,6 +1998,45 @@ async function handleAdminCommand(
     return true;
   }
 
+  if (cmd === "/broadcastall" || cmd === "/broadcastusers") {
+    const rest = text.slice(cmd.length).trim();
+    if (rest) {
+      await runBroadcast(supabase, chatId, { text: rest, target: "users" });
+      return true;
+    }
+    await supabase.from("cg_users").update({ pending_action: "bcastall" }).eq("tg_id", chatId);
+    await send(
+      chatId,
+      "📡 <b>Broadcast to all users</b>\n\nSend the next message (text, photo, video, or any media) and it will be delivered to every user of the bot.\n\nSend <code>/cancel</code> to stop.",
+    );
+    return true;
+  }
+
+  if (cmd === "/status") {
+    const s = await completionStats(supabase);
+    const [users, withdrawals, proofs] = await Promise.all([
+      supabase.from("cg_users").select("id", { count: "exact", head: true }),
+      supabase.from("cg_withdrawals").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("cg_proofs").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    ]);
+    const { data: bals } = await supabase.from("cg_users").select("balance");
+    const totalBal = ((bals ?? []) as any[]).reduce((a, r) => a + Number(r.balance ?? 0), 0);
+    const { data: chats } = await supabase.from("cg_bot_chats").select("chat_id");
+    await send(
+      chatId,
+      `🩺 <b>Bot status</b>\n\n` +
+        `🟢 Bot: <b>online</b>\n` +
+        `👥 Users: <b>${(users.count ?? 0).toLocaleString("en-US")}</b>\n` +
+        `📢 Campaigns total: <b>${s.ads.toLocaleString("en-US")}</b>\n` +
+        `💰 Coins in user balances: <b>${totalBal.toLocaleString("en-US")} ${COIN}</b>\n` +
+        `💸 Pending withdrawals: <b>${withdrawals.count ?? 0}</b> (${withdrawOpen() ? "OPEN" : "CLOSED"})\n` +
+        `📸 Proofs waiting for review: <b>${proofs.count ?? 0}</b>\n` +
+        `🛡 Admin chats: <b>${((chats ?? []) as any[]).length}</b>\n\n` +
+        `<b>Tasks</b>\n${statsText(s)}`,
+    );
+    return true;
+  }
+
   if (cmd === "/broadcast") {
     const rest = text.slice(cmd.length).trim();
     if (rest) {
@@ -2011,6 +2050,7 @@ async function handleAdminCommand(
     );
     return true;
   }
+
 
   if (cmd === "/cancel") {
     await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
