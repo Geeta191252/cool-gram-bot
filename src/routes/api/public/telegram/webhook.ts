@@ -125,6 +125,33 @@ function chatRefFromAd(ad: any): string | number | null {
   return null;
 }
 
+// t.me/c/... links are not joinable. Build a real invite link for private chats.
+async function joinableLink(
+  chatId: number | string | null | undefined,
+  username?: string | null,
+): Promise<string | null> {
+  if (username) return `https://t.me/${username}`;
+  if (!chatId) return null;
+  const created: any = await tg("createChatInviteLink", {
+    chat_id: chatId,
+    name: "Cool Gram",
+    creates_join_request: false,
+  });
+  if (created?.ok && created.result?.invite_link) return created.result.invite_link;
+  const exported: any = await tg("exportChatInviteLink", { chat_id: chatId });
+  if (exported?.ok && typeof exported.result === "string") return exported.result;
+  const info: any = await tg("getChat", { chat_id: chatId });
+  if (info?.ok && info.result?.username) return `https://t.me/${info.result.username}`;
+  if (info?.ok && info.result?.invite_link) return info.result.invite_link;
+  return null;
+}
+
+function isBrokenJoinLink(link: string | null | undefined): boolean {
+  return !link || /t\.me\/c\//.test(link);
+}
+
+
+
 
 function verifyBlocked(res: any): boolean {
   const d = String(res?.description ?? "").toLowerCase();
