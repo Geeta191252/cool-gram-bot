@@ -1728,11 +1728,45 @@ async function handleProofPhoto(
       reply_markup: markup,
     });
   }
+  await supabase
+    .from("cg_proofs")
+    .upsert(
+      {
+        ad_id: adId,
+        tg_id: chatId,
+        file_id: fileId,
+        status: "pending",
+        created_at: new Date().toISOString(),
+        resolved_at: null,
+      } as any,
+      { onConflict: "ad_id,tg_id" },
+    );
+
+  const cat = String((ad as any).category ?? "");
+  const nextLabel =
+    cat === "bots"
+      ? "\u27a1\ufe0f Next Bot"
+      : cat === "channels"
+        ? "\u27a1\ufe0f Next Channel"
+        : cat === "groups"
+          ? "\u27a1\ufe0f Next Group"
+          : "\u27a1\ufe0f Next Task";
   await send(
     chatId,
-    `\u2705 <b>Proof sent for review</b>\n\nTask: <b>${(ad as any).title}</b>\nThe advertiser will check your screenshot. You will get your ${COIN} as soon as it is approved.`,
+    `\u2705 Your completion has been sent to the author for review.\n` +
+      `\u23f3 If it is not reviewed within <b>24 hours</b> — payment will be made automatically.\n\n` +
+      `Task: <b>${(ad as any).title}</b>\nReward: <b>${Number((ad as any).reward).toLocaleString("en-US")} ${COIN}</b>`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: nextLabel, callback_data: cat ? `cat:${cat}` : "earn" }],
+          [{ text: "\ud83d\udd19 Back", callback_data: "earn" }],
+        ],
+      },
+    },
   );
 }
+
 
 async function handleText(supabase: ReturnType<typeof db>, chatId: number, from: any, text: string) {
   const startPayload = text.startsWith("/start") ? text.split(" ")[1] : undefined;
