@@ -56,6 +56,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === SUPPORT_WEBHOOK_PATH && supportEnabled()) {
+    const expected = deriveSecret(supportToken());
+    const actual = String(req.headers["x-telegram-bot-api-secret-token"] ?? "");
+    if (!safeEqual(actual, expected)) {
+      res.writeHead(401).end("Unauthorized");
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+    try {
+      const update = JSON.parse(await readBody(req));
+      await handleSupportUpdate(update);
+    } catch (err) {
+      console.error("Support update failed", err);
+    }
+    return;
+  }
+
   res.writeHead(404).end("Not found");
 });
 
