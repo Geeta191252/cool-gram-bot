@@ -132,6 +132,7 @@ async function main() {
   await getDb();
   server.listen(PORT, () => console.log(`Cool Gram bot listening on :${PORT}`));
   await registerWebhook();
+  await registerSupportWebhook();
   scheduleJob("boost-reminders", 60 * 60 * 1000, runBoostReminders);
   scheduleJob("leave-check", 60 * 60 * 1000, runLeaveCheck);
   scheduleJob("auto-approve", 30 * 60 * 1000, runAutoApprove);
