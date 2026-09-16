@@ -358,16 +358,16 @@ const CATEGORIES: { key: string; label: string }[] = [
 async function showCategories(supabase: ReturnType<typeof db>, chatId: number) {
   const { data: ads } = await supabase
     .from("cg_ads")
-    .select("id, category, reward, budget_left")
+    .select("id, category, reward, budget_left, link, src_chat")
     .eq("is_active", true)
     .neq("owner_tg", chatId);
-  const { data: done } = await supabase.from("cg_completions").select("ad_id").eq("tg_id", chatId);
-  const doneSet = new Set(((done ?? []) as any[]).map((d) => String(d.ad_id)));
+  const f = await taskFilters(supabase, chatId);
   const counts: Record<string, number> = {};
   for (const a of (ads ?? []) as any[]) {
-    if (doneSet.has(String(a.id)) || a.budget_left < a.reward) continue;
+    if (!f.isAvailable(a)) continue;
     counts[a.category] = (counts[a.category] ?? 0) + 1;
   }
+
 
   const rows: any[] = [];
   for (let i = 0; i < CATEGORIES.length; i += 2) {
