@@ -1258,9 +1258,10 @@ async function handleChatShared(supabase: ReturnType<typeof db>, chatId: number,
 
 
   const title = shared.title ?? "My channel";
-  const link = shared.username
-    ? `https://t.me/${shared.username}`
-    : `https://t.me/c/${String(shared.chat_id).replace("-100", "")}`;
+  const link =
+    (await joinableLink(shared.chat_id, shared.username)) ??
+    `https://t.me/c/${String(shared.chat_id).replace("-100", "")}`;
+
 
   if (category.startsWith("boost_")) {
     if (!shared.username) {
