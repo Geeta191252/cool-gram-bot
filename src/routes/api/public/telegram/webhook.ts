@@ -1835,6 +1835,48 @@ async function handleAdminCommand(
     return true;
   }
 
+  if (cmd === "/chats") {
+    const { data: chats } = await supabase
+      .from("cg_bot_chats")
+      .select("chat_id,title,username,type,status,added_by")
+      .order("updated_at", { ascending: false })
+      .limit(200);
+    const rows = (chats ?? []) as any[];
+    if (!rows.length) {
+      await send(chatId, "📭 The bot is not an admin in any chat yet.");
+      return true;
+    }
+    const lines = rows.map((c, i) => {
+      const where = c.username ? `@${c.username}` : `<code>${c.chat_id}</code>`;
+      return `${i + 1}. <b>${c.title ?? c.chat_id}</b>\n   ${where} — ${c.type ?? "chat"} (${c.status})`;
+    });
+    await send(
+      chatId,
+      `🛡 <b>Chats where Cool Gram is admin</b> (${rows.length})\n\n${lines.join("\n")}\n\nBroadcast to all of them: <code>/broadcast</code>`,
+    );
+    return true;
+  }
+
+  if (cmd === "/broadcast") {
+    const rest = text.slice(cmd.length).trim();
+    if (rest) {
+      await runBroadcast(supabase, chatId, { text: rest });
+      return true;
+    }
+    await supabase.from("cg_users").update({ pending_action: "bcast" }).eq("tg_id", chatId);
+    await send(
+      chatId,
+      "📡 <b>Broadcast mode</b>\n\nSend the next message (text, photo, video, or any media) and it will be posted to every chat where the bot is an admin.\n\nSend <code>/cancel</code> to stop.",
+    );
+    return true;
+  }
+
+  if (cmd === "/cancel") {
+    await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+    await send(chatId, "✅ Cancelled.");
+    return true;
+  }
+
   if (cmd === "/withdrawoff" || cmd === "/withdrawon" || cmd === "/withdrawstatus") {
     if (cmd === "/withdrawstatus") {
       await send(
