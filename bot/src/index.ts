@@ -1,6 +1,6 @@
 import http from "node:http";
 import { handleUpdate, deriveSecret, safeEqual } from "./handler.js";
-import { runBoostReminders, runLeaveCheck } from "./crons.js";
+import { runBoostReminders, runLeaveCheck, runAutoApprove } from "./crons.js";
 import { getDb } from "./mongo.js";
 
 const PORT = Number(process.env["PORT"] ?? 8000);
@@ -90,6 +90,7 @@ async function main() {
   await registerWebhook();
   scheduleJob("boost-reminders", 60 * 60 * 1000, runBoostReminders);
   scheduleJob("leave-check", 60 * 60 * 1000, runLeaveCheck);
+  scheduleJob("auto-approve", 30 * 60 * 1000, runAutoApprove);
 }
 
 main().catch((err) => {
