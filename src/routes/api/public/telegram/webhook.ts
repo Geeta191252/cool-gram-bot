@@ -3571,7 +3571,7 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
             const forwarded = message?.forward_origin ?? message?.forward_from_chat;
             const photo = message?.photo;
             let pending: string | null = null;
-            if (chatId && (forwarded || photo)) {
+            if (chatId && (forwarded || photo || isOwner(Number(chatId)))) {
               const { data: u } = await supabase
                 .from("cg_users")
                 .select("pending_action")
