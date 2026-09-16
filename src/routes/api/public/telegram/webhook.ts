@@ -1666,13 +1666,29 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `👥 Users: <b>${users.count ?? 0}</b>\n📢 Active campaigns: <b>${ads.count ?? 0}</b>\n⭐ Stars received: <b>${totalStars}</b>\n\n` +
       `<b>Current prices &amp; settings</b>\n${lines.join("\n")}\n\n` +
       `<b>Commands</b>\n` +
+      `<code>/prices</code> — full price list with short names\n` +
       `<code>/setprice &lt;key&gt; &lt;value&gt;</code> — change any setting\n` +
-      `<code>/resetprice &lt;key&gt;</code> — back to default\n` +
+      `<code>/resetprice &lt;key&gt;</code> — back to default (<code>all</code> resets everything)\n` +
       `<code>/addbalance &lt;tg_id&gt; &lt;amount&gt;</code> — add ${COIN} to a user\n` +
       `<code>/takebalance &lt;tg_id&gt; &lt;amount&gt;</code> — remove ${COIN}\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
-      `<code>/deposits</code> — last Stars deposits`,
+      `<code>/deposits</code> — last Stars deposits\n\n` +
+      `Examples:\n<code>/setprice channel 800</code>\n<code>/setprice group 600</code>\n<code>/setprice views 30</code>\n<code>/setprice bot 900</code>\n<code>/setprice reactions 25</code>\n<code>/setprice referral 600</code>`,
   );
+}
+
+function priceListText() {
+  const aliasOf: Record<string, string[]> = {};
+  for (const [alias, key] of Object.entries(SETTING_ALIASES)) {
+    (aliasOf[key] ||= []).push(alias);
+  }
+  const lines = Object.entries(SETTINGS).map(([key, s]) => {
+    const cur = cfg(key);
+    const short = aliasOf[key]?.length ? ` (short: ${aliasOf[key]!.map((a) => `<code>${a}</code>`).join(", ")})` : "";
+    const changed = cur !== s.def ? ` — default ${s.def.toLocaleString("en-US")}` : "";
+    return `• ${s.label}\n  <code>${key}</code>${short}\n  Now: <b>${cur.toLocaleString("en-US")}</b>${changed}`;
+  });
+  return `💲 <b>Prices &amp; settings</b>\n\n${lines.join("\n\n")}\n\nChange: <code>/setprice &lt;key&gt; &lt;value&gt;</code>\nReset: <code>/resetprice &lt;key&gt;</code> or <code>/resetprice all</code>`;
 }
 
 async function handleAdminCommand(
@@ -1689,15 +1705,20 @@ async function handleAdminCommand(
     return true;
   }
 
+  if (cmd === "/prices" || cmd === "/price") {
+    await send(chatId, priceListText());
+    return true;
+  }
+
   if (cmd === "/setprice") {
-    const key = args[0] ?? "";
-    const value = Number(args[1]);
-    if (!SETTINGS[key] || !Number.isFinite(value) || value < 0) {
+    const key = settingKey(args[0] ?? "");
+    const value = Number(String(args[1] ?? "").replace(/[, _]/g, ""));
+    if (!key || !Number.isFinite(value) || value < 0) {
       await send(
         chatId,
-        `⚠️ Use: <code>/setprice &lt;key&gt; &lt;value&gt;</code>\nKeys: ${Object.keys(SETTINGS)
-          .map((k) => `<code>${k}</code>`)
-          .join(", ")}`,
+        `⚠️ Use: <code>/setprice &lt;key&gt; &lt;value&gt;</code>\n` +
+          `Examples: <code>/setprice channel 800</code>, <code>/setprice referral 600</code>\n\n` +
+          `Send <code>/prices</code> to see every key.`,
       );
       return true;
     }
@@ -1705,22 +1726,35 @@ async function handleAdminCommand(
     settingsMap[key] = value;
     await send(
       chatId,
-      `✅ <b>${SETTINGS[key]!.label}</b> updated to <b>${value.toLocaleString("en-US")}</b>.`,
+      `✅ <b>${SETTINGS[key]!.label}</b> updated to <b>${value.toLocaleString("en-US")}</b>.\nKey: <code>${key}</code>`,
     );
     return true;
   }
 
   if (cmd === "/resetprice") {
-    const key = args[0] ?? "";
-    if (!SETTINGS[key]) {
-      await send(chatId, "⚠️ Unknown key. Open /admin to see all keys.");
+    const raw = (args[0] ?? "").toLowerCase();
+    if (raw === "all") {
+      for (const key of Object.keys(SETTINGS)) {
+        await supabase.from("cg_settings").delete().eq("key", key);
+        delete settingsMap[key];
+      }
+      await send(chatId, "♻️ All prices reset to their defaults.");
+      return true;
+    }
+    const key = settingKey(raw);
+    if (!key) {
+      await send(chatId, "⚠️ Unknown key. Send <code>/prices</code> to see all keys.");
       return true;
     }
     await supabase.from("cg_settings").delete().eq("key", key);
     delete settingsMap[key];
-    await send(chatId, `♻️ <b>${SETTINGS[key]!.label}</b> reset to default <b>${SETTINGS[key]!.def}</b>.`);
+    await send(
+      chatId,
+      `♻️ <b>${SETTINGS[key]!.label}</b> reset to default <b>${SETTINGS[key]!.def.toLocaleString("en-US")}</b>.`,
+    );
     return true;
   }
+
 
   if (cmd === "/addbalance" || cmd === "/takebalance") {
     const target = Number(args[0]);
