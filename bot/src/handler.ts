@@ -1825,7 +1825,9 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/withdrawoff</code> / <code>/withdrawon</code> — close or open withdrawals\n` +
       `<code>/withdrawstatus</code> — current withdrawal status\n` +
       `<code>/chats</code> — every channel/group where the bot is admin\n` +
-      `<code>/broadcast</code> — send any message (text/photo/video) to all those chats\n\n` +
+      `<code>/broadcast</code> — send any message (text/photo/video) to all those chats\n` +
+      `<code>/broadcastall</code> — send any message to <b>all users</b> of the bot\n` +
+      `<code>/status</code> — bot status &amp; task statistics\n\n` +
       `Examples:\n<code>/setprice channel 800</code>\n<code>/setprice group 600</code>\n<code>/setprice views 30</code>\n<code>/setprice bot 900</code>\n<code>/setprice premium 1400</code> — bot start, Premium-only audience\n<code>/setprice premium_cond 4000</code> — bot + conditions, Premium-only\n<code>/setprice reactions 25</code>\n<code>/setprice referral 600</code>`,
   );
 }
@@ -1844,45 +1846,115 @@ function priceListText() {
   return `💲 <b>Prices &amp; settings</b>\n\n${lines.join("\n\n")}\n\nChange: <code>/setprice &lt;key&gt; &lt;value&gt;</code>\nReset: <code>/resetprice &lt;key&gt;</code> or <code>/resetprice all</code>`;
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  channels: "📢 Channels",
+  groups: "👥 Groups",
+  views: "👁 Post views",
+  bots: "🤖 Bots",
+  reactions: "👍 Reactions",
+  boost: "🚀 Telegram boost",
+};
+
+async function completionStats(supabase: ReturnType<typeof db>) {
+  const [{ data: ads }, { data: comps }] = await Promise.all([
+    supabase.from("cg_ads").select("id,category,is_active,budget_left,reward"),
+    supabase.from("cg_completions").select("ad_id"),
+  ]);
+  const adRows = (ads ?? []) as any[];
+  const catOf = new Map<string, string>();
+  const active: Record<string, number> = {};
+  for (const a of adRows) {
+    const cat = String(a.category ?? "channels");
+    catOf.set(String(a.id), cat);
+    if (a.is_active) active[cat] = (active[cat] ?? 0) + 1;
+  }
+  const done: Record<string, number> = {};
+  for (const c of (comps ?? []) as any[]) {
+    const cat = catOf.get(String(c.ad_id));
+    if (cat) done[cat] = (done[cat] ?? 0) + 1;
+  }
+  const total = ((comps ?? []) as any[]).length;
+  return { done, active, total, ads: adRows.length };
+}
+
+function statsText(s: Awaited<ReturnType<typeof completionStats>>) {
+  const lines = Object.entries(CATEGORY_LABELS).map(
+    ([key, label]) =>
+      `${label}\n   ✅ Completed: <b>${(s.done[key] ?? 0).toLocaleString("en-US")}</b>   •   🟢 Live tasks: <b>${(s.active[key] ?? 0).toLocaleString("en-US")}</b>`,
+  );
+  return `${lines.join("\n")}\n\n🏁 Total tasks completed: <b>${s.total.toLocaleString("en-US")}</b>`;
+}
+
 async function runBroadcast(
   supabase: ReturnType<typeof db>,
   chatId: number,
-  payload: { text?: string; copyFrom?: { chat_id: number; message_id: number } },
+  payload: {
+    text?: string;
+    copyFrom?: { chat_id: number; message_id: number };
+    target?: "chats" | "users";
+  },
 ) {
   await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
-  const { data: chats } = await supabase.from("cg_bot_chats").select("chat_id,title");
-  const rows = (chats ?? []) as any[];
+  const target = payload.target ?? "chats";
+  let rows: { chat_id: number; title: string }[] = [];
+  if (target === "users") {
+    const { data: users } = await supabase.from("cg_users").select("tg_id,first_name,username");
+    rows = ((users ?? []) as any[]).map((u) => ({
+      chat_id: Number(u.tg_id),
+      title: u.username ? `@${u.username}` : String(u.first_name ?? u.tg_id),
+    }));
+  } else {
+    const { data: chats } = await supabase.from("cg_bot_chats").select("chat_id,title");
+    rows = ((chats ?? []) as any[]).map((c) => ({
+      chat_id: Number(c.chat_id),
+      title: String(c.title ?? c.chat_id),
+    }));
+  }
   if (!rows.length) {
-    await send(chatId, "📭 The bot is not an admin in any chat yet, so there is nothing to broadcast to.");
+    await send(
+      chatId,
+      target === "users"
+        ? "📭 There are no users to broadcast to yet."
+        : "📭 The bot is not an admin in any chat yet, so there is nothing to broadcast to.",
+    );
     return;
   }
-  await send(chatId, `📡 Sending to <b>${rows.length}</b> chats…`);
+  await send(chatId, `📡 Sending to <b>${rows.length}</b> ${target === "users" ? "users" : "chats"}…`);
 
   let sent = 0;
   const failed: string[] = [];
-  for (const c of rows) {
-    const res: any = payload.copyFrom
-      ? await tgRaw("copyMessage", {
-          chat_id: c.chat_id,
-          from_chat_id: payload.copyFrom.chat_id,
-          message_id: payload.copyFrom.message_id,
-        })
-      : await tgRaw("sendMessage", {
-          chat_id: c.chat_id,
-          text: payload.text,
-          parse_mode: "HTML",
-          disable_web_page_preview: false,
-        });
-    if (res?.ok) sent++;
-    else failed.push(String(c.title ?? c.chat_id));
+  const batchSize = target === "users" ? 25 : 1;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize);
+    const results = await Promise.all(
+      batch.map((c) =>
+        payload.copyFrom
+          ? tgRaw("copyMessage", {
+              chat_id: c.chat_id,
+              from_chat_id: payload.copyFrom.chat_id,
+              message_id: payload.copyFrom.message_id,
+            })
+          : tgRaw("sendMessage", {
+              chat_id: c.chat_id,
+              text: payload.text,
+              parse_mode: "HTML",
+              disable_web_page_preview: false,
+            }),
+      ),
+    );
+    results.forEach((res: any, idx) => {
+      if (res?.ok) sent++;
+      else failed.push(batch[idx]!.title);
+    });
   }
 
   await send(
     chatId,
     `📡 <b>Broadcast finished</b>\n\n✅ Sent: <b>${sent}</b>\n❌ Failed: <b>${failed.length}</b>` +
-      (failed.length ? `\n\nFailed chats:\n${failed.slice(0, 20).join("\n")}` : ""),
+      (failed.length ? `\n\nFailed:\n${failed.slice(0, 20).join("\n")}` : ""),
   );
 }
+
 
 async function handleAdminCommand(
   supabase: ReturnType<typeof db>,
@@ -1925,6 +1997,45 @@ async function handleAdminCommand(
     return true;
   }
 
+  if (cmd === "/broadcastall" || cmd === "/broadcastusers") {
+    const rest = text.slice(cmd.length).trim();
+    if (rest) {
+      await runBroadcast(supabase, chatId, { text: rest, target: "users" });
+      return true;
+    }
+    await supabase.from("cg_users").update({ pending_action: "bcastall" }).eq("tg_id", chatId);
+    await send(
+      chatId,
+      "📡 <b>Broadcast to all users</b>\n\nSend the next message (text, photo, video, or any media) and it will be delivered to every user of the bot.\n\nSend <code>/cancel</code> to stop.",
+    );
+    return true;
+  }
+
+  if (cmd === "/status") {
+    const s = await completionStats(supabase);
+    const [users, withdrawals, proofs] = await Promise.all([
+      supabase.from("cg_users").select("id", { count: "exact", head: true }),
+      supabase.from("cg_withdrawals").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("cg_proofs").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    ]);
+    const { data: bals } = await supabase.from("cg_users").select("balance");
+    const totalBal = ((bals ?? []) as any[]).reduce((a, r) => a + Number(r.balance ?? 0), 0);
+    const { data: chats } = await supabase.from("cg_bot_chats").select("chat_id");
+    await send(
+      chatId,
+      `🩺 <b>Bot status</b>\n\n` +
+        `🟢 Bot: <b>online</b>\n` +
+        `👥 Users: <b>${(users.count ?? 0).toLocaleString("en-US")}</b>\n` +
+        `📢 Campaigns total: <b>${s.ads.toLocaleString("en-US")}</b>\n` +
+        `💰 Coins in user balances: <b>${totalBal.toLocaleString("en-US")} ${COIN}</b>\n` +
+        `💸 Pending withdrawals: <b>${withdrawals.count ?? 0}</b> (${withdrawOpen() ? "OPEN" : "CLOSED"})\n` +
+        `📸 Proofs waiting for review: <b>${proofs.count ?? 0}</b>\n` +
+        `🛡 Admin chats: <b>${((chats ?? []) as any[]).length}</b>\n\n` +
+        `<b>Tasks</b>\n${statsText(s)}`,
+    );
+    return true;
+  }
+
   if (cmd === "/broadcast") {
     const rest = text.slice(cmd.length).trim();
     if (rest) {
@@ -1938,6 +2049,7 @@ async function handleAdminCommand(
     );
     return true;
   }
+
 
   if (cmd === "/cancel") {
     await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
@@ -2526,17 +2638,22 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       );
       return;
     case "📊 Bots and Statistics": {
-      const users = await supabase.from("cg_users").select("id", { count: "exact", head: true });
-      const ads = await supabase
-        .from("cg_ads")
-        .select("id", { count: "exact", head: true })
-        .eq("is_active", true);
+      const [users, s, myDone] = await Promise.all([
+        supabase.from("cg_users").select("id", { count: "exact", head: true }),
+        completionStats(supabase),
+        supabase.from("cg_completions").select("id", { count: "exact", head: true }).eq("tg_id", chatId),
+      ]);
       await send(
         chatId,
-        `📊 <b>COOL GRAM statistics</b>\n\n👥 Users: <b>${users.count ?? 0}</b>\n📢 Active campaigns: <b>${ads.count ?? 0}</b>`,
+        `📊 <b>COOL GRAM statistics</b>\n\n` +
+          `👥 Users: <b>${(users.count ?? 0).toLocaleString("en-US")}</b>\n` +
+          `📢 Campaigns created: <b>${s.ads.toLocaleString("en-US")}</b>\n` +
+          `🙋 Your completed tasks: <b>${(myDone.count ?? 0).toLocaleString("en-US")}</b>\n\n` +
+          `<b>Completed by category</b>\n${statsText(s)}`,
       );
       return;
     }
+
     case "🔗 Useful Links":
       await send(
         chatId,
@@ -3607,13 +3724,15 @@ export async function handleUpdate(update: any): Promise<void> {
       }
       if (
         chatId &&
-        pending === "bcast" &&
+        (pending === "bcast" || pending === "bcastall") &&
         isOwner(Number(chatId)) &&
         !String(text ?? "").startsWith("/")
       ) {
         await runBroadcast(supabase, Number(chatId), {
           copyFrom: { chat_id: Number(chatId), message_id: Number(message.message_id) },
+          target: pending === "bcastall" ? "users" : "chats",
         });
+
       } else if (chatId && usersShared) await handleUsersShared(supabase, chatId, usersShared);
       else if (chatId && shared) await handleChatShared(supabase, chatId, shared);
       else if (chatId && photo && pending?.startsWith("proof:"))
