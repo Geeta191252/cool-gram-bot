@@ -1847,45 +1847,115 @@ function priceListText() {
   return `💲 <b>Prices &amp; settings</b>\n\n${lines.join("\n\n")}\n\nChange: <code>/setprice &lt;key&gt; &lt;value&gt;</code>\nReset: <code>/resetprice &lt;key&gt;</code> or <code>/resetprice all</code>`;
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  channels: "📢 Channels",
+  groups: "👥 Groups",
+  views: "👁 Post views",
+  bots: "🤖 Bots",
+  reactions: "👍 Reactions",
+  boost: "🚀 Telegram boost",
+};
+
+async function completionStats(supabase: ReturnType<typeof db>) {
+  const [{ data: ads }, { data: comps }] = await Promise.all([
+    supabase.from("cg_ads").select("id,category,is_active,budget_left,reward"),
+    supabase.from("cg_completions").select("ad_id"),
+  ]);
+  const adRows = (ads ?? []) as any[];
+  const catOf = new Map<string, string>();
+  const active: Record<string, number> = {};
+  for (const a of adRows) {
+    const cat = String(a.category ?? "channels");
+    catOf.set(String(a.id), cat);
+    if (a.is_active) active[cat] = (active[cat] ?? 0) + 1;
+  }
+  const done: Record<string, number> = {};
+  for (const c of (comps ?? []) as any[]) {
+    const cat = catOf.get(String(c.ad_id));
+    if (cat) done[cat] = (done[cat] ?? 0) + 1;
+  }
+  const total = ((comps ?? []) as any[]).length;
+  return { done, active, total, ads: adRows.length };
+}
+
+function statsText(s: Awaited<ReturnType<typeof completionStats>>) {
+  const lines = Object.entries(CATEGORY_LABELS).map(
+    ([key, label]) =>
+      `${label}\n   ✅ Completed: <b>${(s.done[key] ?? 0).toLocaleString("en-US")}</b>   •   🟢 Live tasks: <b>${(s.active[key] ?? 0).toLocaleString("en-US")}</b>`,
+  );
+  return `${lines.join("\n")}\n\n🏁 Total tasks completed: <b>${s.total.toLocaleString("en-US")}</b>`;
+}
+
 async function runBroadcast(
   supabase: ReturnType<typeof db>,
   chatId: number,
-  payload: { text?: string; copyFrom?: { chat_id: number; message_id: number } },
+  payload: {
+    text?: string;
+    copyFrom?: { chat_id: number; message_id: number };
+    target?: "chats" | "users";
+  },
 ) {
   await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
-  const { data: chats } = await supabase.from("cg_bot_chats").select("chat_id,title");
-  const rows = (chats ?? []) as any[];
+  const target = payload.target ?? "chats";
+  let rows: { chat_id: number; title: string }[] = [];
+  if (target === "users") {
+    const { data: users } = await supabase.from("cg_users").select("tg_id,first_name,username");
+    rows = ((users ?? []) as any[]).map((u) => ({
+      chat_id: Number(u.tg_id),
+      title: u.username ? `@${u.username}` : String(u.first_name ?? u.tg_id),
+    }));
+  } else {
+    const { data: chats } = await supabase.from("cg_bot_chats").select("chat_id,title");
+    rows = ((chats ?? []) as any[]).map((c) => ({
+      chat_id: Number(c.chat_id),
+      title: String(c.title ?? c.chat_id),
+    }));
+  }
   if (!rows.length) {
-    await send(chatId, "📭 The bot is not an admin in any chat yet, so there is nothing to broadcast to.");
+    await send(
+      chatId,
+      target === "users"
+        ? "📭 There are no users to broadcast to yet."
+        : "📭 The bot is not an admin in any chat yet, so there is nothing to broadcast to.",
+    );
     return;
   }
-  await send(chatId, `📡 Sending to <b>${rows.length}</b> chats…`);
+  await send(chatId, `📡 Sending to <b>${rows.length}</b> ${target === "users" ? "users" : "chats"}…`);
 
   let sent = 0;
   const failed: string[] = [];
-  for (const c of rows) {
-    const res: any = payload.copyFrom
-      ? await tgRaw("copyMessage", {
-          chat_id: c.chat_id,
-          from_chat_id: payload.copyFrom.chat_id,
-          message_id: payload.copyFrom.message_id,
-        })
-      : await tgRaw("sendMessage", {
-          chat_id: c.chat_id,
-          text: payload.text,
-          parse_mode: "HTML",
-          disable_web_page_preview: false,
-        });
-    if (res?.ok) sent++;
-    else failed.push(String(c.title ?? c.chat_id));
+  const batchSize = target === "users" ? 25 : 1;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize);
+    const results = await Promise.all(
+      batch.map((c) =>
+        payload.copyFrom
+          ? tgRaw("copyMessage", {
+              chat_id: c.chat_id,
+              from_chat_id: payload.copyFrom.chat_id,
+              message_id: payload.copyFrom.message_id,
+            })
+          : tgRaw("sendMessage", {
+              chat_id: c.chat_id,
+              text: payload.text,
+              parse_mode: "HTML",
+              disable_web_page_preview: false,
+            }),
+      ),
+    );
+    results.forEach((res: any, idx) => {
+      if (res?.ok) sent++;
+      else failed.push(batch[idx]!.title);
+    });
   }
 
   await send(
     chatId,
     `📡 <b>Broadcast finished</b>\n\n✅ Sent: <b>${sent}</b>\n❌ Failed: <b>${failed.length}</b>` +
-      (failed.length ? `\n\nFailed chats:\n${failed.slice(0, 20).join("\n")}` : ""),
+      (failed.length ? `\n\nFailed:\n${failed.slice(0, 20).join("\n")}` : ""),
   );
 }
+
 
 async function handleAdminCommand(
   supabase: ReturnType<typeof db>,
