@@ -48,6 +48,7 @@ const DEFAULTS: Record<string, DefaultMap> = {
   cg_settings: {},
   cg_telegram_updates: {},
   cg_cron_tokens: {},
+  cg_bot_chats: { title: null, username: null, type: null, status: "administrator", added_by: null },
 };
 
 let client: MongoClient | undefined;
