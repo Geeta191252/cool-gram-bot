@@ -2081,21 +2081,13 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       );
       return;
     }
-    await supabase
-      .from("cg_users")
-      .update({
-        pending_action: `amt:${JSON.stringify({
-          category: "reactions",
-          title: "Post reactions",
-          link,
-        })}`,
-      })
-      .eq("tg_id", chatId);
-    await send(
-      chatId,
-      `✅ Post selected:\n${link}\n\nNow send the reward and budget:\n<code>Reward | Budget</code>\nExample: <code>5 | 100</code>`,
-      { reply_markup: MAIN_KEYBOARD },
-    );
+    await askPrice(supabase, chatId, {
+      category: "reactions",
+      title: "Post reactions",
+      link,
+      base_min_price: cfg("min_reactions"),
+      min_price: cfg("min_reactions"),
+    });
     return;
   }
 
