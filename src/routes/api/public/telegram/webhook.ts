@@ -2738,6 +2738,61 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
     return;
   }
 
+  if (data.startsWith("ppen:") || data.startsWith("pnop:")) {
+    const applyPenalty = data.startsWith("ppen:");
+    const [, adIdRaw, workerRaw] = data.split(":");
+    const adId = adIdRaw ?? "";
+    const worker = Number(workerRaw);
+    if (chatId !== OWNER_TG) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Not allowed.", show_alert: true });
+      return;
+    }
+    const { data: ad } = await supabase
+      .from("cg_ads")
+      .select("id, title, reward, owner_tg")
+      .eq("id", adId)
+      .maybeSingle();
+    if (!ad) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Task not found." });
+      return;
+    }
+    const advertiser = Number((ad as any).owner_tg);
+    const penalty = Number((ad as any).reward);
+    if (!applyPenalty) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "No penalty applied." });
+      await send(chatId, `✅ No penalty applied for <b>${(ad as any).title}</b>.`);
+      return;
+    }
+    const { data: au } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", advertiser)
+      .maybeSingle();
+    const oldBal = Number((au as any)?.balance ?? 0);
+    const newBal = Math.max(0, oldBal - penalty);
+    await supabase.from("cg_users").update({ balance: newBal }).eq("tg_id", advertiser);
+    await supabase.from("cg_transactions").insert({
+      tg_id: advertiser,
+      amount: -penalty,
+      reason: `Penalty: unfair proof rejection for "${(ad as any).title}"`,
+    });
+    await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Penalty applied." });
+    await send(
+      chatId,
+      `⚠️ Penalty of ${penalty.toLocaleString("en-US")} ${COIN} charged to <code>${advertiser}</code> for <b>${(ad as any).title}</b>.`,
+    );
+    await send(
+      advertiser,
+      `⚠️ <b>Penalty applied</b>\n\n` +
+        `Admin reviewed your rejected proof for <b>${(ad as any).title}</b> and found the worker had completed the conditions.\n` +
+        `-${penalty.toLocaleString("en-US")} ${COIN} deducted from your balance.\n` +
+        `💰 Balance: ${newBal.toLocaleString("en-US")} ${COIN}\n\n` +
+        `Reject a proof only when it is fake or incomplete. Repeated unfair rejections may get your campaigns blocked.`,
+    );
+    return;
+  }
+
+
   if (data.startsWith("papv:") || data.startsWith("prej:")) {
     const approve = data.startsWith("papv:");
     const [, adIdRaw, workerRaw] = data.split(":");
