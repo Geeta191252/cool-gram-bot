@@ -78,6 +78,7 @@ const SETTINGS: Record<string, { def: number; label: string }> = {
   commission_pct: { def: 15, label: "Task creation commission (%)" },
   star_rate: { def: 1900, label: `${COIN} credited per 1 Telegram Star` },
   min_withdraw: { def: 50000, label: "Minimum withdrawal amount" },
+  withdraw_open: { def: 1, label: "Withdrawals open (1 = open, 0 = closed)" },
   referral_bonus: { def: REFERRAL_BONUS_DEF, label: "Referral bonus per invited user" },
   signup_bonus: { def: SIGNUP_BONUS_DEF, label: "Welcome bonus for a new user" },
 };
@@ -112,7 +113,18 @@ const SETTING_ALIASES: Record<string, string> = {
   commission: "commission_pct",
   stars: "star_rate",
   withdraw: "min_withdraw",
+  min_withdrawal: "min_withdraw",
+  withdrawal: "min_withdraw",
+  withdraw_status: "withdraw_open",
+  withdrawals_open: "withdraw_open",
 };
+
+const WITHDRAW_CLOSED_MSG =
+  "🚧 <b>Withdrawals are temporarily closed.</b>\n\nThey will open again soon — please check back later. Keep earning in the meantime!";
+
+function withdrawOpen() {
+  return cfg("withdraw_open") !== 0;
+}
 
 function settingKey(raw: string): string | null {
   const k = (raw ?? "").trim().toLowerCase();
@@ -1712,7 +1724,10 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/addbalance &lt;tg_id&gt; &lt;amount&gt;</code> — add ${COIN} to a user\n` +
       `<code>/takebalance &lt;tg_id&gt; &lt;amount&gt;</code> — remove ${COIN}\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
-      `<code>/deposits</code> — last Stars deposits\n\n` +
+      `<code>/deposits</code> — last Stars deposits\n` +
+      `<code>/setprice withdraw &lt;amount&gt;</code> — minimum withdrawal\n` +
+      `<code>/withdrawoff</code> / <code>/withdrawon</code> — close or open withdrawals\n` +
+      `<code>/withdrawstatus</code> — current withdrawal status\n\n` +
       `Examples:\n<code>/setprice channel 800</code>\n<code>/setprice group 600</code>\n<code>/setprice views 30</code>\n<code>/setprice bot 900</code>\n<code>/setprice premium 1400</code> — bot start, Premium-only audience\n<code>/setprice premium_cond 4000</code> — bot + conditions, Premium-only\n<code>/setprice reactions 25</code>\n<code>/setprice referral 600</code>`,
   );
 }
@@ -1747,6 +1762,28 @@ async function handleAdminCommand(
 
   if (cmd === "/prices" || cmd === "/price") {
     await send(chatId, priceListText());
+    return true;
+  }
+
+  if (cmd === "/withdrawoff" || cmd === "/withdrawon" || cmd === "/withdrawstatus") {
+    if (cmd === "/withdrawstatus") {
+      await send(
+        chatId,
+        `💸 Withdrawals are currently <b>${withdrawOpen() ? "OPEN" : "CLOSED"}</b>.\nMinimum: <b>${cfg("min_withdraw").toLocaleString("en-US")} ${COIN}</b>\n\n<code>/withdrawoff</code> — close\n<code>/withdrawon</code> — open\n<code>/setprice withdraw 50000</code> — minimum amount`,
+      );
+      return true;
+    }
+    const open = cmd === "/withdrawon" ? 1 : 0;
+    await supabase
+      .from("cg_settings")
+      .upsert({ key: "withdraw_open", value: open, updated_at: new Date().toISOString() });
+    settingsMap["withdraw_open"] = open;
+    await send(
+      chatId,
+      open
+        ? "✅ Withdrawals are now <b>OPEN</b> for all users."
+        : "🚧 Withdrawals are now <b>CLOSED</b>. Users will see: “Withdrawals are temporarily closed. They will open again soon.”",
+    );
     return true;
   }
 
@@ -1995,6 +2032,11 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
   }
 
   if (user?.pending_action === "withdraw" && /^\d+$/.test(text.trim())) {
+    if (!withdrawOpen()) {
+      await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
+      await send(chatId, WITHDRAW_CLOSED_MSG);
+      return;
+    }
     const amount = Number(text.trim());
     const min = cfg("min_withdraw");
     if (amount < min) {
@@ -2256,6 +2298,10 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
       await showPromoteMenu(supabase, chatId);
       return;
     case "💸 Withdrawal": {
+      if (!withdrawOpen()) {
+        await send(chatId, WITHDRAW_CLOSED_MSG);
+        return;
+      }
       const min = cfg("min_withdraw");
       await supabase.from("cg_users").update({ pending_action: "withdraw" }).eq("tg_id", chatId);
       await send(
