@@ -35,10 +35,13 @@ const SPONSOR_LINK = "https://t.me/CoolGramAdvertise";
 
 async function isSponsorMember(userId: number): Promise<boolean> {
   const res = await tg("getChatMember", { chat_id: SPONSOR_CHANNEL, user_id: userId });
-  if (!res?.ok) return false;
+  // If the bot cannot read the channel (not an admin there), do not block anyone.
+  if (!res?.ok) return true;
   const status = res.result?.status;
-  return ["member", "administrator", "creator", "restricted"].includes(status);
+  if (status === "left" || status === "kicked") return false;
+  return true;
 }
+
 
 function sponsorPrompt() {
   return {

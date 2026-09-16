@@ -52,21 +52,26 @@ function displayName(from: any) {
 
 async function isSponsorMember(userId: number): Promise<boolean> {
   const verifierTokens = [...new Set([MAIN_BOT_TOKEN, TOKEN].filter(Boolean))];
+  let sawDefinite = false;
   for (const token of verifierTokens) {
     const res: any = await tgWithToken(token, "getChatMember", {
       chat_id: SPONSOR_CHANNEL,
       user_id: userId,
     });
+    if (!res?.ok) continue; // cannot verify with this bot (not admin / no access)
     const status = res?.result?.status;
     const isMember =
       status === "member" ||
       status === "administrator" ||
       status === "creator" ||
-      (status === "restricted" && res?.result?.is_member === true);
-    if (res?.ok && isMember) return true;
+      status === "restricted";
+    if (isMember) return true;
+    if (status === "left" || status === "kicked") sawDefinite = true;
   }
-  return false;
+  // If no bot could verify, do not block the user.
+  return !sawDefinite;
 }
+
 
 async function sponsorPrompt(chatId: number) {
   await tg("sendMessage", {
