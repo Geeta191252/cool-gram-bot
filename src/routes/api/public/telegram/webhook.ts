@@ -1686,9 +1686,10 @@ async function handleProofPhoto(
   }
   const { data: ad } = await supabase
     .from("cg_ads")
-    .select("id, title, link, reward, budget_left, is_active, owner_tg, conditions")
+    .select("id, title, link, reward, budget_left, is_active, owner_tg, conditions, category")
     .eq("id", adId)
     .maybeSingle();
+
   await supabase.from("cg_users").update({ pending_action: null }).eq("tg_id", chatId);
   if (!ad || !(ad as any).is_active) {
     await send(chatId, "\u274c This task is no longer available.");
