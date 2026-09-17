@@ -2328,6 +2328,11 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
 
   if (text.startsWith("/") && (await handleAdminCommand(supabase, chatId, text))) return;
 
+  if (await isBlocked(supabase, Number(from?.id ?? chatId))) {
+    await send(chatId, BLOCKED_MSG);
+    return;
+  }
+
   if (!(await sponsorGate(Number(from?.id ?? chatId), chatId))) return;
 
   if (text.startsWith("/deposit")) {
