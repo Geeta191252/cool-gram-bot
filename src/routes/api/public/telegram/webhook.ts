@@ -2342,14 +2342,25 @@ async function handleAdminCommand(
     await send(
       chatId,
       block
-        ? `🚫 User <code>${target}</code> is now <b>blocked</b>.\n⏸ Campaigns stopped: <b>${touched}</b>${reason ? `\nReason: ${reason}` : ""}`
+        ? `🚫 User <code>${target}</code> is now <b>blocked</b>.\n⏸ Campaigns stopped: <b>${touched}</b>${wipe ? `\n👛 Wallet cleared: <b>${oldBal.toLocaleString("en-US")} ${COIN}</b> removed` : ""}${fake ? "\n🚩 Reason: fake referrals" : reason ? `\nReason: ${reason}` : ""}`
         : `✅ User <code>${target}</code> is <b>unblocked</b>.\n▶️ Campaigns resumed: <b>${touched}</b>`,
     );
+    const fakeMsg =
+      `🚩 <b>Account banned — fake referrals</b>\n\n` +
+      `⚠️ Our system found that you invited fake or self-created accounts to farm referral rewards. This breaks the Cool Gram rules.\n\n` +
+      `What happened:\n` +
+      `• 🚫 Your account is blocked\n` +
+      `• 👛 Your wallet has been set to <b>0 ${COIN}</b>\n` +
+      `• ⏸ All your campaigns have been stopped\n\n` +
+      `⚠️ <b>Warning:</b> Creating fake accounts again will make this ban permanent and any future balance will be removed as well.\n\n` +
+      `If you believe this is a mistake, contact support.`;
     await tgRaw("sendMessage", {
       chat_id: target,
       parse_mode: "HTML",
       text: block
-        ? `${BLOCKED_MSG}${reason ? `\n\nReason: ${reason}` : ""}`
+        ? fake
+          ? fakeMsg
+          : `${BLOCKED_MSG}${wipe ? `\n\n👛 Your wallet has been set to 0 ${COIN}.` : ""}${reason ? `\n\nReason: ${reason}` : ""}`
         : "✅ <b>You are unblocked</b>\n\nYou can use Cool Gram again. Send /start to continue.",
     });
     return true;
