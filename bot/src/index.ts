@@ -116,6 +116,22 @@ async function registerSupportWebhook() {
   console.log("support setWebhook:", await res.text());
 }
 
+async function registerCommands() {
+  if (!BOT_TOKEN) return;
+  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      commands: [
+        { command: "start", description: "Open Cool Gram" },
+        { command: "myid", description: "Show your user ID" },
+        { command: "deposit", description: "Deposit with Telegram Stars" },
+      ],
+    }),
+  });
+  console.log("setMyCommands:", await res.text());
+}
+
 function scheduleJob(name: string, everyMs: number, job: () => Promise<unknown>) {
   const run = async () => {
     try {
@@ -133,6 +149,7 @@ async function main() {
   server.listen(PORT, () => console.log(`Cool Gram bot listening on :${PORT}`));
   await registerWebhook();
   await registerSupportWebhook();
+  await registerCommands();
   scheduleJob("boost-reminders", 60 * 60 * 1000, runBoostReminders);
   scheduleJob("leave-check", 60 * 60 * 1000, runLeaveCheck);
   scheduleJob("auto-approve", 30 * 60 * 1000, runAutoApprove);
