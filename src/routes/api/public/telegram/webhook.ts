@@ -2543,7 +2543,50 @@ async function handleAdminCommand(
     return true;
   }
 
-  if (cmd === "/deposits") {
+  if (cmd === "/alltasks" || cmd === "/taskusers") {
+    const { data: ads } = await supabase
+      .from("cg_ads")
+      .select("owner_tg, category, is_active")
+      .limit(2000);
+    const all = (ads ?? []) as any[];
+    if (!all.length) {
+      await send(chatId, "📋 No campaigns yet.");
+      return true;
+    }
+    const byOwner = new Map<number, { total: number; live: number; cats: Map<string, number> }>();
+    for (const a of all) {
+      const o = Number(a.owner_tg);
+      if (!byOwner.has(o)) byOwner.set(o, { total: 0, live: 0, cats: new Map() });
+      const e = byOwner.get(o)!;
+      e.total++;
+      if (a.is_active) e.live++;
+      e.cats.set(a.category, (e.cats.get(a.category) ?? 0) + 1);
+    }
+    const top = [...byOwner.entries()].sort((a, b) => b[1].total - a[1].total).slice(0, 25);
+    const ids = top.map(([id]) => id);
+    const { data: users } = await supabase
+      .from("cg_users")
+      .select("tg_id, username, first_name")
+      .in("tg_id", ids);
+    const nameOf = new Map<number, string>();
+    for (const u of (users ?? []) as any[]) {
+      nameOf.set(Number(u.tg_id), u.username ? `@${u.username}` : (u.first_name ?? "User"));
+    }
+    const lines = top.map(([id, e], i) => {
+      const cats = [...e.cats.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([c, n]) => `${(CATEGORY_LABELS[c] ?? c).replace(/^\S+\s/, "")} ×${n}`)
+        .join(", ");
+      const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
+      return `${medal} <b>${nameOf.get(id) ?? "User"}</b> (<code>${id}</code>)\n   📋 ${e.total} task(s) • 🟢 ${e.live} live\n   ${cats}`;
+    });
+    await send(
+      chatId,
+      `📋 <b>All campaigns by user</b>\nTotal campaigns: <b>${all.length}</b> • Advertisers: <b>${byOwner.size}</b>\n(Sorted: most tasks first)\n\n${lines.join("\n\n")}\n\n🔍 Details: <code>/usertasks &lt;tg_id&gt;</code>`,
+    );
+    return true;
+  }
+
     const { data } = await supabase
       .from("cg_star_payments")
       .select("tg_id, username, stars, credited, created_at")
