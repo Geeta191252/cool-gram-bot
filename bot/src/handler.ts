@@ -2437,9 +2437,9 @@ async function handleAdminCommand(
       .order("created_at", { ascending: false })
       .limit(50);
     const list = (ads ?? []) as any[];
-    const u = await getUser(supabase, target);
+    const { user: u } = await getUser(supabase, target);
     if (!list.length) {
-      await send(chatId, `📋 <b>${u.first_name ?? "User"}</b> (<code>${target}</code>) has no campaigns.`);
+      await send(chatId, `📋 <b>${(u as any).first_name ?? "User"}</b> (<code>${target}</code>) has no campaigns.`);
       return true;
     }
     const lines = list.map((a, i) => {
@@ -2451,7 +2451,7 @@ async function handleAdminCommand(
     const active = list.filter((a) => a.is_active).length;
     await send(
       chatId,
-      `📋 <b>Campaigns by ${u.first_name ?? "User"}</b> (<code>${target}</code>)\nTotal: <b>${list.length}</b> • 🟢 Live: <b>${active}</b>\n\n${lines.join("\n\n")}`,
+      `📋 <b>Campaigns by ${(u as any).first_name ?? "User"}</b> (<code>${target}</code>)\nTotal: <b>${list.length}</b> • 🟢 Live: <b>${active}</b>\n\n${lines.join("\n\n")}`,
     );
     return true;
   }
