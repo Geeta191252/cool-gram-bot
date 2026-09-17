@@ -110,6 +110,8 @@ const SETTINGS: Record<string, { def: number; label: string }> = {
   min_withdraw: { def: 50000, label: "Minimum withdrawal amount" },
   withdraw_open: { def: 1, label: "Withdrawals open (1 = open, 0 = closed)" },
   referral_bonus: { def: REFERRAL_BONUS_DEF, label: "Referral bonus per invited user" },
+  ref_daily_max: { def: 20, label: "Max paid referrals per day per user" },
+  ref_task_gate: { def: 1, label: "Tasks a referral must complete before bonus is paid" },
   signup_bonus: { def: SIGNUP_BONUS_DEF, label: "Welcome bonus for a new user" },
 };
 
