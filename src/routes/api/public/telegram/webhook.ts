@@ -1899,6 +1899,7 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/block &lt;tg_id&gt; [reason]</code> — block a user from the bot\n` +
       `<code>/unblock &lt;tg_id&gt;</code> — unblock a user\n` +
       `<code>/blocked</code> — list blocked users\n` +
+      `<code>/find &lt;name or @username&gt;</code> — find a user's ID\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
       `<code>/usertasks &lt;tg_id&gt;</code> — all campaigns of a user\n` +
       `<code>/refs &lt;tg_id&gt;</code> — who a user invited (paid / pending)\n` +
@@ -2404,6 +2405,43 @@ async function handleAdminCommand(
   }
 
 
+  if (cmd === "/find" || cmd === "/search" || cmd === "/user") {
+    const q = args.join(" ").trim().toLowerCase().replace(/^@/, "");
+    if (!q) {
+      await send(
+        chatId,
+        "⚠️ Use: <code>/find &lt;name or @username&gt;</code>\nExample: <code>/find Rahul</code> or <code>/find rahul_07</code>",
+      );
+      return true;
+    }
+    const { data: all } = await supabase
+      .from("cg_users")
+      .select("tg_id, username, first_name, balance, created_at")
+      .order("created_at", { ascending: false })
+      .limit(3000);
+    const hits = ((all ?? []) as any[])
+      .filter(
+        (u) =>
+          String(u.tg_id).includes(q) ||
+          String(u.username ?? "").toLowerCase().includes(q) ||
+          String(u.first_name ?? "").toLowerCase().includes(q),
+      )
+      .slice(0, 30);
+    if (!hits.length) {
+      await send(chatId, `❌ No user matches <b>${q}</b>.\n\nEvery user can send you their ID with <code>/myid</code>.`);
+      return true;
+    }
+    const rows = hits.map(
+      (u) =>
+        `👤 <b>${(u.first_name ?? "User").replace(/[<>]/g, "")}</b> ${u.username ? `@${u.username}` : ""}\nID: <code>${u.tg_id}</code> — ${Number(u.balance ?? 0).toLocaleString("en-US")} ${COIN}`,
+    );
+    await send(
+      chatId,
+      `🔎 <b>Matches for "${q.replace(/[<>]/g, "")}"</b> (${hits.length})\n\n${rows.join("\n\n")}\n\nUse: <code>/userinfo &lt;id&gt;</code> · <code>/addbalance &lt;id&gt; &lt;amount&gt;</code> · <code>/block &lt;id&gt;</code>`,
+    );
+    return true;
+  }
+
   if (cmd === "/userinfo") {
     const target = Number(args[0]);
     if (!Number.isFinite(target)) {
@@ -2578,6 +2616,16 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
   const bot = await botUsername();
 
   if (text.startsWith("/") && (await handleAdminCommand(supabase, chatId, text))) return;
+
+  if (/^\/(myid|id|whoami)\b/i.test(text.trim())) {
+    const id = Number(from?.id ?? chatId);
+    await send(
+      chatId,
+      `🆔 <b>Your ID</b>\n\n<code>${id}</code>\n\nSend this number to the Cool Gram team whenever they ask for your ID.`,
+    );
+    return;
+  }
+
 
   if (await isBlocked(supabase, Number(from?.id ?? chatId))) {
     await send(chatId, BLOCKED_MSG);
