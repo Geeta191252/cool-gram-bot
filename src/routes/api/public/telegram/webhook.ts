@@ -72,6 +72,26 @@ async function sponsorGate(userId: number, chatId: number): Promise<boolean> {
   return false;
 }
 
+const BLOCKED_MSG =
+  "🚫 <b>You are blocked</b>\n\nYour access to Cool Gram has been restricted by the administrator.\nIf you think this is a mistake, contact support.";
+
+const blockCache = new Map<number, { v: boolean; t: number }>();
+const BLOCK_TTL = 60 * 1000;
+
+async function isBlocked(supabase: ReturnType<typeof db>, userId: number): Promise<boolean> {
+  if (userId === OWNER_TG) return false;
+  const hit = blockCache.get(userId);
+  if (hit && Date.now() - hit.t < BLOCK_TTL) return hit.v;
+  const { data } = await supabase
+    .from("cg_users")
+    .select("blocked")
+    .eq("tg_id", userId)
+    .maybeSingle();
+  const v = Boolean((data as any)?.blocked);
+  blockCache.set(userId, { v, t: Date.now() });
+  return v;
+}
+
 const SETTINGS: Record<string, { def: number; label: string }> = {
   min_channel: { def: 750, label: "Channel subscriber min price" },
   min_group: { def: 600, label: "Group join min price" },
@@ -1822,6 +1842,10 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/resetprice &lt;key&gt;</code> — back to default (<code>all</code> resets everything)\n` +
       `<code>/addbalance &lt;tg_id&gt; &lt;amount&gt;</code> — add ${COIN} to a user\n` +
       `<code>/takebalance &lt;tg_id&gt; &lt;amount&gt;</code> — remove ${COIN}\n` +
+      `<code>/resetbalance &lt;tg_id&gt;</code> — set balance to 0\n` +
+      `<code>/block &lt;tg_id&gt; [reason]</code> — block a user from the bot\n` +
+      `<code>/unblock &lt;tg_id&gt;</code> — unblock a user\n` +
+      `<code>/blocked</code> — list blocked users\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
       `<code>/deposits</code> — last Stars deposits\n` +
       `<code>/setprice withdraw &lt;amount&gt;</code> — minimum withdrawal\n` +
@@ -2165,6 +2189,102 @@ async function handleAdminCommand(
     return true;
   }
 
+  if (cmd === "/resetbalance" || cmd === "/zerobalance") {
+    const target = Number(args[0]);
+    if (!Number.isFinite(target)) {
+      await send(chatId, `⚠️ Use: <code>${cmd} &lt;tg_id&gt;</code>`);
+      return true;
+    }
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", target)
+      .maybeSingle();
+    if (!u) {
+      await send(chatId, "❌ This user has not started the bot yet.");
+      return true;
+    }
+    const old = Number((u as any).balance) || 0;
+    await supabase.from("cg_users").update({ balance: 0 }).eq("tg_id", target);
+    if (old > 0) {
+      await supabase
+        .from("cg_transactions")
+        .insert({ tg_id: target, amount: -old, reason: "Admin balance reset" });
+    }
+    await send(
+      chatId,
+      `✅ User <code>${target}</code> balance reset to <b>0 ${COIN}</b> (was ${old.toLocaleString("en-US")}).`,
+    );
+    await tgRaw("sendMessage", {
+      chat_id: target,
+      parse_mode: "HTML",
+      text: `ℹ️ Your balance was reset to <b>0 ${COIN}</b> by the administrator.`,
+    });
+    return true;
+  }
+
+  if (cmd === "/block" || cmd === "/unblock") {
+    const target = Number(args[0]);
+    if (!Number.isFinite(target)) {
+      await send(chatId, `⚠️ Use: <code>${cmd} &lt;tg_id&gt;</code>`);
+      return true;
+    }
+    if (target === OWNER_TG) {
+      await send(chatId, "⚠️ You cannot block yourself.");
+      return true;
+    }
+    const block = cmd === "/block";
+    const reason = args.slice(1).join(" ").trim();
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("tg_id")
+      .eq("tg_id", target)
+      .maybeSingle();
+    if (!u) {
+      await send(chatId, "❌ This user has not started the bot yet.");
+      return true;
+    }
+    await supabase
+      .from("cg_users")
+      .update({ blocked: block, pending_action: null })
+      .eq("tg_id", target);
+    blockCache.set(target, { v: block, t: Date.now() });
+    await send(
+      chatId,
+      block
+        ? `🚫 User <code>${target}</code> is now <b>blocked</b>.${reason ? `\nReason: ${reason}` : ""}`
+        : `✅ User <code>${target}</code> is <b>unblocked</b>.`,
+    );
+    await tgRaw("sendMessage", {
+      chat_id: target,
+      parse_mode: "HTML",
+      text: block
+        ? `${BLOCKED_MSG}${reason ? `\n\nReason: ${reason}` : ""}`
+        : "✅ <b>You are unblocked</b>\n\nYou can use Cool Gram again. Send /start to continue.",
+    });
+    return true;
+  }
+
+  if (cmd === "/blocked") {
+    const { data } = await supabase
+      .from("cg_users")
+      .select("tg_id, username, first_name, balance")
+      .eq("blocked", true)
+      .limit(50);
+    const rows = ((data ?? []) as any[]).map(
+      (r) =>
+        `🚫 <code>${r.tg_id}</code> ${r.username ? `@${r.username}` : (r.first_name ?? "")} — ${Number(r.balance ?? 0).toLocaleString("en-US")} ${COIN}`,
+    );
+    await send(
+      chatId,
+      rows.length
+        ? `🚫 <b>Blocked users (${rows.length})</b>\n\n${rows.join("\n")}\n\nUnblock: <code>/unblock &lt;tg_id&gt;</code>`
+        : "✅ No blocked users.",
+    );
+    return true;
+  }
+
+
   if (cmd === "/userinfo") {
     const target = Number(args[0]);
     if (!Number.isFinite(target)) {
@@ -2307,6 +2427,11 @@ async function handleText(supabase: ReturnType<typeof db>, chatId: number, from:
   const bot = await botUsername();
 
   if (text.startsWith("/") && (await handleAdminCommand(supabase, chatId, text))) return;
+
+  if (await isBlocked(supabase, Number(from?.id ?? chatId))) {
+    await send(chatId, BLOCKED_MSG);
+    return;
+  }
 
   if (!(await sponsorGate(Number(from?.id ?? chatId), chatId))) return;
 
@@ -2690,6 +2815,16 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
   const chatId = cb.message?.chat?.id as number;
   const data = String(cb.data ?? "");
   const fromId = Number(cb.from?.id ?? chatId);
+
+  if (await isBlocked(supabase, fromId)) {
+    await tg("answerCallbackQuery", {
+      callback_query_id: cb.id,
+      text: "🚫 You are blocked by the administrator.",
+      show_alert: true,
+    });
+    return;
+  }
+
 
   if (data === "chkjoin") {
     if (await isSponsorMember(fromId, true)) {
