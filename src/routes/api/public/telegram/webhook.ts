@@ -2358,7 +2358,7 @@ async function handleAdminCommand(
       .order("balance", { ascending: false })
       .limit(min ? 100 : 50);
     if (min) query = query.gte("balance", min);
-    const [{ data }, allBals] = await Promise.all([
+    const [{ data }, { data: allBals }] = await Promise.all([
       query,
       supabase.from("cg_users").select("balance"),
     ]);
