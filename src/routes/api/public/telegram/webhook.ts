@@ -3803,8 +3803,8 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       return;
     }
 
-    // Condition tasks never pay via Check — a proof photo must be sent first.
-    if ((ad as any).conditions) {
+    // Condition tasks and bot tasks never pay via Check — a proof photo must be sent first.
+    if ((ad as any).conditions || catEarly === "bots") {
       await tg("answerCallbackQuery", {
         callback_query_id: cb.id,
         text: "📸 This task needs a proof photo. Send it first.",
@@ -3814,12 +3814,13 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
         chatId,
         `📸 <b>Photo proof required</b>\n\n` +
           `Task: <b>${(ad as any).title}</b>\n` +
-          `Conditions: ${(ad as any).conditions}\n\n` +
-          `Complete all the conditions, take a screenshot, then send it here with the button below. Coins are credited only after the advertiser approves your photo.`,
+          `Conditions: ${(ad as any).conditions ?? "Start the bot and open it"}\n\n` +
+          `Start the bot, complete everything, take a screenshot, then send it here with the button below. Coins are credited only after the advertiser approves your photo.`,
         { reply_markup: { inline_keyboard: [[{ text: "📸 Send proof", callback_data: `proof:${adId}` }]] } },
       );
       return;
     }
+
 
     const cat = catEarly;
     if (cat === "boost") {
