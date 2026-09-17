@@ -2581,22 +2581,35 @@ async function handleAdminCommand(
   }
 
   if (cmd === "/alltasks" || cmd === "/taskusers") {
-    const { data: ads } = await supabase
-      .from("cg_ads")
-      .select("owner_tg, category, is_active")
-      .limit(2000);
+    const [{ data: ads }, { data: allComps }] = await Promise.all([
+      supabase.from("cg_ads").select("id, owner_tg, category, is_active, reward, budget_left").limit(2000),
+      supabase.from("cg_completions").select("ad_id").limit(20000),
+    ]);
     const all = (ads ?? []) as any[];
     if (!all.length) {
       await send(chatId, "📋 No campaigns yet.");
       return true;
     }
-    const byOwner = new Map<number, { total: number; live: number; cats: Map<string, number> }>();
+    const doneOf = new Map<string, number>();
+    for (const c of (allComps ?? []) as any[]) {
+      doneOf.set(String(c.ad_id), (doneOf.get(String(c.ad_id)) ?? 0) + 1);
+    }
+    const byOwner = new Map<
+      number,
+      { total: number; live: number; qty: number; done: number; cats: Map<string, number> }
+    >();
+    let grandQty = 0;
     for (const a of all) {
       const o = Number(a.owner_tg);
-      if (!byOwner.has(o)) byOwner.set(o, { total: 0, live: 0, cats: new Map() });
+      if (!byOwner.has(o)) byOwner.set(o, { total: 0, live: 0, qty: 0, done: 0, cats: new Map() });
       const e = byOwner.get(o)!;
       e.total++;
       if (a.is_active) e.live++;
+      const left = Number(a.reward) > 0 ? Math.floor(Number(a.budget_left) / Number(a.reward)) : 0;
+      const done = doneOf.get(String(a.id)) ?? 0;
+      e.qty += left + done;
+      e.done += done;
+      grandQty += left + done;
       e.cats.set(a.category, (e.cats.get(a.category) ?? 0) + 1);
     }
     const top = [...byOwner.entries()].sort((a, b) => b[1].total - a[1].total).slice(0, 25);
