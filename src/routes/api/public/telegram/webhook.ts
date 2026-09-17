@@ -3830,6 +3830,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "You have already completed this task." });
       return;
     }
+    await payReferralIfDue(supabase, chatId);
 
     const reward = (ad as any).reward as number;
     const { data: user } = await supabase
