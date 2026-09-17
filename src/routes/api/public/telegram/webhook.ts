@@ -2185,6 +2185,102 @@ async function handleAdminCommand(
     return true;
   }
 
+  if (cmd === "/resetbalance" || cmd === "/zerobalance") {
+    const target = Number(args[0]);
+    if (!Number.isFinite(target)) {
+      await send(chatId, `⚠️ Use: <code>${cmd} &lt;tg_id&gt;</code>`);
+      return true;
+    }
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("balance")
+      .eq("tg_id", target)
+      .maybeSingle();
+    if (!u) {
+      await send(chatId, "❌ This user has not started the bot yet.");
+      return true;
+    }
+    const old = Number((u as any).balance) || 0;
+    await supabase.from("cg_users").update({ balance: 0 }).eq("tg_id", target);
+    if (old > 0) {
+      await supabase
+        .from("cg_transactions")
+        .insert({ tg_id: target, amount: -old, reason: "Admin balance reset" });
+    }
+    await send(
+      chatId,
+      `✅ User <code>${target}</code> balance reset to <b>0 ${COIN}</b> (was ${old.toLocaleString("en-US")}).`,
+    );
+    await tgRaw("sendMessage", {
+      chat_id: target,
+      parse_mode: "HTML",
+      text: `ℹ️ Your balance was reset to <b>0 ${COIN}</b> by the administrator.`,
+    });
+    return true;
+  }
+
+  if (cmd === "/block" || cmd === "/unblock") {
+    const target = Number(args[0]);
+    if (!Number.isFinite(target)) {
+      await send(chatId, `⚠️ Use: <code>${cmd} &lt;tg_id&gt;</code>`);
+      return true;
+    }
+    if (target === OWNER_TG) {
+      await send(chatId, "⚠️ You cannot block yourself.");
+      return true;
+    }
+    const block = cmd === "/block";
+    const reason = args.slice(1).join(" ").trim();
+    const { data: u } = await supabase
+      .from("cg_users")
+      .select("tg_id")
+      .eq("tg_id", target)
+      .maybeSingle();
+    if (!u) {
+      await send(chatId, "❌ This user has not started the bot yet.");
+      return true;
+    }
+    await supabase
+      .from("cg_users")
+      .update({ blocked: block, pending_action: null })
+      .eq("tg_id", target);
+    blockCache.set(target, { v: block, t: Date.now() });
+    await send(
+      chatId,
+      block
+        ? `🚫 User <code>${target}</code> is now <b>blocked</b>.${reason ? `\nReason: ${reason}` : ""}`
+        : `✅ User <code>${target}</code> is <b>unblocked</b>.`,
+    );
+    await tgRaw("sendMessage", {
+      chat_id: target,
+      parse_mode: "HTML",
+      text: block
+        ? `${BLOCKED_MSG}${reason ? `\n\nReason: ${reason}` : ""}`
+        : "✅ <b>You are unblocked</b>\n\nYou can use Cool Gram again. Send /start to continue.",
+    });
+    return true;
+  }
+
+  if (cmd === "/blocked") {
+    const { data } = await supabase
+      .from("cg_users")
+      .select("tg_id, username, first_name, balance")
+      .eq("blocked", true)
+      .limit(50);
+    const rows = ((data ?? []) as any[]).map(
+      (r) =>
+        `🚫 <code>${r.tg_id}</code> ${r.username ? `@${r.username}` : (r.first_name ?? "")} — ${Number(r.balance ?? 0).toLocaleString("en-US")} ${COIN}`,
+    );
+    await send(
+      chatId,
+      rows.length
+        ? `🚫 <b>Blocked users (${rows.length})</b>\n\n${rows.join("\n")}\n\nUnblock: <code>/unblock &lt;tg_id&gt;</code>`
+        : "✅ No blocked users.",
+    );
+    return true;
+  }
+
+
   if (cmd === "/userinfo") {
     const target = Number(args[0]);
     if (!Number.isFinite(target)) {
