@@ -2336,6 +2336,67 @@ async function handleAdminCommand(
     return true;
   }
 
+  if (cmd === "/refs") {
+    const target = Number(args[0]);
+    if (!Number.isFinite(target)) {
+      await send(chatId, "⚠️ Use: <code>/refs &lt;tg_id&gt;</code>");
+      return true;
+    }
+    const { data } = await supabase
+      .from("cg_users")
+      .select("tg_id, username, first_name, ref_paid, created_at")
+      .eq("referred_by", target)
+      .limit(60);
+    const list = (data ?? []) as any[];
+    const paid = list.filter((r) => r.ref_paid).length;
+    const rows = list
+      .slice(0, 40)
+      .map(
+        (r) =>
+          `${r.ref_paid ? "✅" : "⏳"} <code>${r.tg_id}</code> ${r.username ? `@${r.username}` : (r.first_name ?? "")}`,
+      );
+    await send(
+      chatId,
+      `🔗 <b>Referrals of ${target}</b>\n\nTotal: <b>${list.length}</b> • Paid: <b>${paid}</b> • Pending: <b>${list.length - paid}</b>\n\n${rows.join("\n") || "None."}`,
+    );
+    return true;
+  }
+
+  if (cmd === "/refscan") {
+    const { data } = await supabase
+      .from("cg_users")
+      .select("tg_id, username, first_name, referral_count")
+      .order("referral_count", { ascending: false })
+      .limit(15);
+    const rows: string[] = [];
+    for (const r of ((data ?? []) as any[]).filter((r) => Number(r.referral_count) > 0)) {
+      const { data: invited } = await supabase
+        .from("cg_users")
+        .select("tg_id")
+        .eq("referred_by", r.tg_id)
+        .limit(200);
+      const ids = ((invited ?? []) as any[]).map((i) => Number(i.tg_id));
+      let active = 0;
+      for (const id of ids.slice(0, 60)) {
+        const { count } = await supabase
+          .from("cg_completions")
+          .select("id", { count: "exact", head: true })
+          .eq("tg_id", id);
+        if ((count ?? 0) > 0) active += 1;
+      }
+      const checked = Math.min(ids.length, 60);
+      const ratio = checked ? Math.round((active / checked) * 100) : 0;
+      rows.push(
+        `${ratio < 30 && checked >= 5 ? "🚩" : "👤"} <code>${r.tg_id}</code> ${r.username ? `@${r.username}` : ""} — invites ${ids.length}, active ${active}/${checked} (${ratio}%)`,
+      );
+    }
+    await send(
+      chatId,
+      `🕵️ <b>Referral fraud scan</b>\n\n${rows.join("\n") || "No referrals yet."}\n\n🚩 = most invited users never did a task (likely fake).\nBlock with <code>/block &lt;tg_id&gt; reason</code>.`,
+    );
+    return true;
+  }
+
 
   if (cmd === "/userinfo") {
     const target = Number(args[0]);
