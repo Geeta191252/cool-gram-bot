@@ -72,6 +72,26 @@ async function sponsorGate(userId: number, chatId: number): Promise<boolean> {
   return false;
 }
 
+const BLOCKED_MSG =
+  "🚫 <b>You are blocked</b>\n\nYour access to Cool Gram has been restricted by the administrator.\nIf you think this is a mistake, contact support.";
+
+const blockCache = new Map<number, { v: boolean; t: number }>();
+const BLOCK_TTL = 60 * 1000;
+
+async function isBlocked(supabase: ReturnType<typeof db>, userId: number): Promise<boolean> {
+  if (userId === OWNER_TG) return false;
+  const hit = blockCache.get(userId);
+  if (hit && Date.now() - hit.t < BLOCK_TTL) return hit.v;
+  const { data } = await supabase
+    .from("cg_users")
+    .select("blocked")
+    .eq("tg_id", userId)
+    .maybeSingle();
+  const v = Boolean((data as any)?.blocked);
+  blockCache.set(userId, { v, t: Date.now() });
+  return v;
+}
+
 const SETTINGS: Record<string, { def: number; label: string }> = {
   min_channel: { def: 750, label: "Channel subscriber min price" },
   min_group: { def: 600, label: "Group join min price" },
