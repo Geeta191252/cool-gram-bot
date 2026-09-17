@@ -2587,7 +2587,7 @@ async function handleAdminCommand(
     return true;
   }
 
-    const { data } = await supabase
+  if (cmd === "/deposits") {
       .from("cg_star_payments")
       .select("tg_id, username, stars, credited, created_at")
       .order("created_at", { ascending: false })
