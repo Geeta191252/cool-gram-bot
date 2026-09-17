@@ -884,6 +884,7 @@ async function handleBoostClaim(
 
   if (claimed >= days) {
     await supabase.from("cg_completions").insert({ ad_id: ad.id, tg_id: chatId });
+    await payReferralIfDue(supabase, chatId);
     await notifyIfCampaignFinished(supabase, ad.id);
     await send(
       chatId,
