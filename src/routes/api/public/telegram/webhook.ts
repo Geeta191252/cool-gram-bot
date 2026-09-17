@@ -1897,6 +1897,7 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/takebalance &lt;tg_id&gt; &lt;amount&gt;</code> — remove ${COIN}\n` +
       `<code>/resetbalance &lt;tg_id&gt;</code> — set balance to 0\n` +
       `<code>/block &lt;tg_id&gt; [reason]</code> — block a user from the bot\n` +
+      `<code>/banfake &lt;tg_id&gt;</code> — ban for fake referrals: wallet 0, tasks stopped, warning sent\n` +
       `<code>/unblock &lt;tg_id&gt;</code> — unblock a user\n` +
       `<code>/blocked</code> — list blocked users\n` +
       `<code>/balances</code> — every user's balance (richest first)\n` +
