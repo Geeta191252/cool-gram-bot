@@ -2310,11 +2310,30 @@ async function handleAdminCommand(
       .update({ blocked: block, pending_action: null })
       .eq("tg_id", target);
     blockCache.set(target, { v: block, t: Date.now() });
+    // Stop / resume all campaigns of this advertiser
+    const { data: ownAds } = await supabase
+      .from("cg_ads")
+      .select("id, reward, budget_left, is_active")
+      .eq("owner_tg", target)
+      .limit(500);
+    let touched = 0;
+    for (const a of (ownAds ?? []) as any[]) {
+      if (block) {
+        if (!a.is_active) continue;
+        await supabase.from("cg_ads").update({ is_active: false }).eq("id", a.id);
+        touched++;
+      } else {
+        if (a.is_active) continue;
+        if (Number(a.budget_left) < Number(a.reward)) continue;
+        await supabase.from("cg_ads").update({ is_active: true }).eq("id", a.id);
+        touched++;
+      }
+    }
     await send(
       chatId,
       block
-        ? `🚫 User <code>${target}</code> is now <b>blocked</b>.${reason ? `\nReason: ${reason}` : ""}`
-        : `✅ User <code>${target}</code> is <b>unblocked</b>.`,
+        ? `🚫 User <code>${target}</code> is now <b>blocked</b>.\n⏸ Campaigns stopped: <b>${touched}</b>${reason ? `\nReason: ${reason}` : ""}`
+        : `✅ User <code>${target}</code> is <b>unblocked</b>.\n▶️ Campaigns resumed: <b>${touched}</b>`,
     );
     await tgRaw("sendMessage", {
       chat_id: target,
