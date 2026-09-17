@@ -3443,6 +3443,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Already completed." });
       return;
     }
+    await payReferralIfDue(supabase, chatId);
     const { data: u } = await supabase
       .from("cg_users")
       .select("balance")
