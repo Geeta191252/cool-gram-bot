@@ -22,6 +22,7 @@ const DEFAULTS: Record<string, DefaultMap> = {
     username: null,
     pending_action: null,
     referred_by: null,
+    ref_paid: false,
   },
   cg_ads: {
     reward: 5,

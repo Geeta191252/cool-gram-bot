@@ -110,6 +110,8 @@ const SETTINGS: Record<string, { def: number; label: string }> = {
   min_withdraw: { def: 50000, label: "Minimum withdrawal amount" },
   withdraw_open: { def: 1, label: "Withdrawals open (1 = open, 0 = closed)" },
   referral_bonus: { def: REFERRAL_BONUS_DEF, label: "Referral bonus per invited user" },
+  ref_daily_max: { def: 20, label: "Max paid referrals per day per user" },
+  ref_task_gate: { def: 1, label: "Tasks a referral must complete before bonus is paid" },
   signup_bonus: { def: SIGNUP_BONUS_DEF, label: "Welcome bonus for a new user" },
 };
 
@@ -473,27 +475,76 @@ async function getUser(supabase: ReturnType<typeof db>, from: any, startPayload?
   });
 
   if (referrer) {
+    await send(
+      referrer,
+      `👤 <b>New referral joined!</b>\n\nYour bonus of <b>${cfg("referral_bonus")} ${COIN}</b> will be credited once this user completes <b>${cfg("ref_task_gate")}</b> task(s). This protects the program from fake accounts.`,
+    );
+  }
+
+  return { user: created as unknown as CgUser, isNew: true };
+}
+
+// Referral bonus is paid only after the invited user proves to be real
+// (completes tasks), and only inside a daily limit per referrer.
+async function payReferralIfDue(supabase: ReturnType<typeof db>, tgId: number) {
+  try {
+    const { data: me } = await supabase
+      .from("cg_users")
+      .select("tg_id, referred_by, ref_paid")
+      .eq("tg_id", tgId)
+      .maybeSingle();
+    const m = me as any;
+    if (!m || !m.referred_by || m.ref_paid) return;
+
+    const gate = Math.max(1, cfg("ref_task_gate"));
+    const { count: doneCount } = await supabase
+      .from("cg_completions")
+      .select("id", { count: "exact", head: true })
+      .eq("tg_id", tgId);
+    if ((doneCount ?? 0) < gate) return;
+
+    const referrer = Number(m.referred_by);
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: paidToday } = await supabase
+      .from("cg_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("tg_id", referrer)
+      .eq("reason", "Referral bonus")
+      .gte("created_at", since);
+    if ((paidToday ?? 0) >= Math.max(1, cfg("ref_daily_max"))) {
+      await supabase.from("cg_users").update({ ref_paid: true }).eq("tg_id", tgId);
+      await send(
+        referrer,
+        `⚠️ Daily referral limit reached (${cfg("ref_daily_max")} per day). This referral was not paid. Try again tomorrow.`,
+      );
+      return;
+    }
+
     const { data: refUser } = await supabase
       .from("cg_users")
       .select("balance, referral_count")
       .eq("tg_id", referrer)
       .maybeSingle();
-    if (refUser) {
-      await supabase
-        .from("cg_users")
-        .update({
-          balance: (refUser as any).balance + cfg("referral_bonus"),
-          referral_count: (refUser as any).referral_count + 1,
-        })
-        .eq("tg_id", referrer);
-      await supabase
-        .from("cg_transactions")
-        .insert({ tg_id: referrer, amount: cfg("referral_bonus"), reason: "Referral bonus" });
-      await send(referrer, `🎉 New referral joined! +${cfg("referral_bonus")} ${COIN} added to your balance.`);
-    }
-  }
+    if (!refUser) return;
 
-  return { user: created as unknown as CgUser, isNew: true };
+    await supabase.from("cg_users").update({ ref_paid: true }).eq("tg_id", tgId);
+    await supabase
+      .from("cg_users")
+      .update({
+        balance: Number((refUser as any).balance) + cfg("referral_bonus"),
+        referral_count: Number((refUser as any).referral_count) + 1,
+      })
+      .eq("tg_id", referrer);
+    await supabase
+      .from("cg_transactions")
+      .insert({ tg_id: referrer, amount: cfg("referral_bonus"), reason: "Referral bonus" });
+    await send(
+      referrer,
+      `🎉 <b>Referral confirmed!</b> +${cfg("referral_bonus")} ${COIN} added to your balance.`,
+    );
+  } catch {
+    // never break a completion because of referral accounting
+  }
 }
 
 const CATEGORIES: { key: string; label: string }[] = [
@@ -833,6 +884,7 @@ async function handleBoostClaim(
 
   if (claimed >= days) {
     await supabase.from("cg_completions").insert({ ad_id: ad.id, tg_id: chatId });
+    await payReferralIfDue(supabase, chatId);
     await notifyIfCampaignFinished(supabase, ad.id);
     await send(
       chatId,
@@ -1847,6 +1899,10 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/unblock &lt;tg_id&gt;</code> — unblock a user\n` +
       `<code>/blocked</code> — list blocked users\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
+      `<code>/refs &lt;tg_id&gt;</code> — who a user invited (paid / pending)\n` +
+      `<code>/refscan</code> — find fake-referral accounts\n` +
+      `<code>/setprice ref_daily_max 20</code> — daily referral limit\n` +
+      `<code>/setprice ref_task_gate 1</code> — tasks needed before bonus\n` +
       `<code>/deposits</code> — last Stars deposits\n` +
       `<code>/setprice withdraw &lt;amount&gt;</code> — minimum withdrawal\n` +
       `<code>/withdrawoff</code> / <code>/withdrawon</code> — close or open withdrawals\n` +
@@ -2280,6 +2336,67 @@ async function handleAdminCommand(
       rows.length
         ? `🚫 <b>Blocked users (${rows.length})</b>\n\n${rows.join("\n")}\n\nUnblock: <code>/unblock &lt;tg_id&gt;</code>`
         : "✅ No blocked users.",
+    );
+    return true;
+  }
+
+  if (cmd === "/refs") {
+    const target = Number(args[0]);
+    if (!Number.isFinite(target)) {
+      await send(chatId, "⚠️ Use: <code>/refs &lt;tg_id&gt;</code>");
+      return true;
+    }
+    const { data } = await supabase
+      .from("cg_users")
+      .select("tg_id, username, first_name, ref_paid, created_at")
+      .eq("referred_by", target)
+      .limit(60);
+    const list = (data ?? []) as any[];
+    const paid = list.filter((r) => r.ref_paid).length;
+    const rows = list
+      .slice(0, 40)
+      .map(
+        (r) =>
+          `${r.ref_paid ? "✅" : "⏳"} <code>${r.tg_id}</code> ${r.username ? `@${r.username}` : (r.first_name ?? "")}`,
+      );
+    await send(
+      chatId,
+      `🔗 <b>Referrals of ${target}</b>\n\nTotal: <b>${list.length}</b> • Paid: <b>${paid}</b> • Pending: <b>${list.length - paid}</b>\n\n${rows.join("\n") || "None."}`,
+    );
+    return true;
+  }
+
+  if (cmd === "/refscan") {
+    const { data } = await supabase
+      .from("cg_users")
+      .select("tg_id, username, first_name, referral_count")
+      .order("referral_count", { ascending: false })
+      .limit(15);
+    const rows: string[] = [];
+    for (const r of ((data ?? []) as any[]).filter((r) => Number(r.referral_count) > 0)) {
+      const { data: invited } = await supabase
+        .from("cg_users")
+        .select("tg_id")
+        .eq("referred_by", r.tg_id)
+        .limit(200);
+      const ids = ((invited ?? []) as any[]).map((i) => Number(i.tg_id));
+      let active = 0;
+      for (const id of ids.slice(0, 60)) {
+        const { count } = await supabase
+          .from("cg_completions")
+          .select("id", { count: "exact", head: true })
+          .eq("tg_id", id);
+        if ((count ?? 0) > 0) active += 1;
+      }
+      const checked = Math.min(ids.length, 60);
+      const ratio = checked ? Math.round((active / checked) * 100) : 0;
+      rows.push(
+        `${ratio < 30 && checked >= 5 ? "🚩" : "👤"} <code>${r.tg_id}</code> ${r.username ? `@${r.username}` : ""} — invites ${ids.length}, active ${active}/${checked} (${ratio}%)`,
+      );
+    }
+    await send(
+      chatId,
+      `🕵️ <b>Referral fraud scan</b>\n\n${rows.join("\n") || "No referrals yet."}\n\n🚩 = most invited users never did a task (likely fake).\nBlock with <code>/block &lt;tg_id&gt; reason</code>.`,
     );
     return true;
   }
@@ -3391,6 +3508,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Already completed." });
       return;
     }
+    await payReferralIfDue(supabase, chatId);
     const { data: u } = await supabase
       .from("cg_users")
       .select("balance")
@@ -3634,6 +3752,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Already reviewed." });
       return;
     }
+    await payReferralIfDue(supabase, worker);
     const { data: wu } = await supabase
       .from("cg_users")
       .select("balance")
@@ -3776,6 +3895,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "You have already completed this task." });
       return;
     }
+    await payReferralIfDue(supabase, chatId);
 
     const reward = (ad as any).reward as number;
     const { data: user } = await supabase
