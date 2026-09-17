@@ -1897,6 +1897,7 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/unblock &lt;tg_id&gt;</code> — unblock a user\n` +
       `<code>/blocked</code> — list blocked users\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
+      `<code>/usertasks &lt;tg_id&gt;</code> — all campaigns of a user\n` +
       `<code>/refs &lt;tg_id&gt;</code> — who a user invited (paid / pending)\n` +
       `<code>/refscan</code> — find fake-referral accounts\n` +
       `<code>/setprice ref_daily_max 20</code> — daily referral limit\n` +
@@ -2419,6 +2420,38 @@ async function handleAdminCommand(
     await send(
       chatId,
       `👤 <b>${x.first_name ?? "User"}</b> ${x.username ? `@${x.username}` : ""}\nID: <code>${x.tg_id}</code>\nBalance: <b>${Number(x.balance).toLocaleString("en-US")} ${COIN}</b>\nReferrals: <b>${x.referral_count}</b>\nJoined: ${new Date(x.created_at).toDateString()}`,
+    );
+    return true;
+  }
+
+  if (cmd === "/usertasks" || cmd === "/tasks") {
+    const target = Number(args[0]);
+    if (!Number.isFinite(target)) {
+      await send(chatId, "⚠️ Use: <code>/usertasks &lt;tg_id&gt;</code>");
+      return true;
+    }
+    const { data: ads } = await supabase
+      .from("cg_ads")
+      .select("id, title, category, reward, budget_left, is_active, created_at")
+      .eq("owner_tg", target)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    const list = (ads ?? []) as any[];
+    const { user: u } = await getUser(supabase, target);
+    if (!list.length) {
+      await send(chatId, `📋 <b>${(u as any).first_name ?? "User"}</b> (<code>${target}</code>) has no campaigns.`);
+      return true;
+    }
+    const lines = list.map((a, i) => {
+      const label = CATEGORY_LABELS[a.category] ?? a.category;
+      const status = a.is_active ? "🟢 Live" : "🔴 Off";
+      const left = a.reward > 0 ? Math.floor(Number(a.budget_left) / Number(a.reward)) : 0;
+      return `${i + 1}. ${status} ${label} — <b>${a.title}</b>\n   💰 ${Number(a.reward).toLocaleString("en-US")} ${COIN} • ${left} left`;
+    });
+    const active = list.filter((a) => a.is_active).length;
+    await send(
+      chatId,
+      `📋 <b>Campaigns by ${(u as any).first_name ?? "User"}</b> (<code>${target}</code>)\nTotal: <b>${list.length}</b> • 🟢 Live: <b>${active}</b>\n\n${lines.join("\n\n")}`,
     );
     return true;
   }
