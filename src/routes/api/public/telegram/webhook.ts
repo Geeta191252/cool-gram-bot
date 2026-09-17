@@ -1842,6 +1842,10 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/resetprice &lt;key&gt;</code> — back to default (<code>all</code> resets everything)\n` +
       `<code>/addbalance &lt;tg_id&gt; &lt;amount&gt;</code> — add ${COIN} to a user\n` +
       `<code>/takebalance &lt;tg_id&gt; &lt;amount&gt;</code> — remove ${COIN}\n` +
+      `<code>/resetbalance &lt;tg_id&gt;</code> — set balance to 0\n` +
+      `<code>/block &lt;tg_id&gt; [reason]</code> — block a user from the bot\n` +
+      `<code>/unblock &lt;tg_id&gt;</code> — unblock a user\n` +
+      `<code>/blocked</code> — list blocked users\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
       `<code>/deposits</code> — last Stars deposits\n` +
       `<code>/setprice withdraw &lt;amount&gt;</code> — minimum withdrawal\n` +
