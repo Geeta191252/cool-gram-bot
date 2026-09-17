@@ -2654,7 +2654,7 @@ async function handleAdminCommand(
     });
     await send(
       chatId,
-      `📋 <b>All campaigns by user</b>\nTotal campaigns: <b>${all.length}</b> • Advertisers: <b>${byOwner.size}</b>\nTotal ordered quantity: <b>${grandQty}x</b>\n(Sorted: most tasks first)\n\n${lines.join("\n\n")}\n\n🔍 Details: <code>/usertasks &lt;tg_id&gt;</code>`,
+      `🟢 <b>Live campaigns by user</b>\nLive campaigns: <b>${all.length}</b> • Advertisers: <b>${byOwner.size}</b>\nTotal ordered quantity: <b>${grandQty}x</b>\n(Sorted: most tasks first)\n\n${lines.join("\n\n")}\n\n🔍 Details: <code>/usertasks &lt;tg_id&gt;</code>`,
     );
     return true;
   }
