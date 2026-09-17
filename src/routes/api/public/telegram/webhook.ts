@@ -2716,6 +2716,16 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
   const data = String(cb.data ?? "");
   const fromId = Number(cb.from?.id ?? chatId);
 
+  if (await isBlocked(supabase, fromId)) {
+    await tg("answerCallbackQuery", {
+      callback_query_id: cb.id,
+      text: "🚫 You are blocked by the administrator.",
+      show_alert: true,
+    });
+    return;
+  }
+
+
   if (data === "chkjoin") {
     if (await isSponsorMember(fromId, true)) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "✅ Verified!" });
