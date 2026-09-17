@@ -1903,6 +1903,7 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/find &lt;name or @username&gt;</code> — find a user's ID\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
       `<code>/usertasks &lt;tg_id&gt;</code> — all campaigns of a user\n` +
+      `<code>/alltasks</code> — campaigns of every user, top advertisers first\n` +
       `<code>/refs &lt;tg_id&gt;</code> — who a user invited (paid / pending)\n` +
       `<code>/refscan</code> — find fake-referral accounts\n` +
       `<code>/setprice ref_daily_max 20</code> — daily referral limit\n` +
@@ -2588,6 +2589,7 @@ async function handleAdminCommand(
   }
 
   if (cmd === "/deposits") {
+    const { data } = await supabase
       .from("cg_star_payments")
       .select("tg_id, username, stars, credited, created_at")
       .order("created_at", { ascending: false })
