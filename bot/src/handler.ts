@@ -1894,6 +1894,7 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/takebalance &lt;tg_id&gt; &lt;amount&gt;</code> — remove ${COIN}\n` +
       `<code>/resetbalance &lt;tg_id&gt;</code> — set balance to 0\n` +
       `<code>/block &lt;tg_id&gt; [reason]</code> — block a user from the bot\n` +
+      `<code>/banfake &lt;tg_id&gt;</code> — ban for fake referrals: wallet 0, tasks stopped, warning sent\n` +
       `<code>/unblock &lt;tg_id&gt;</code> — unblock a user\n` +
       `<code>/blocked</code> — list blocked users\n` +
       `<code>/balances</code> — every user's balance (richest first)\n` +
@@ -2281,7 +2282,7 @@ async function handleAdminCommand(
     return true;
   }
 
-  if (cmd === "/block" || cmd === "/unblock") {
+  if (cmd === "/block" || cmd === "/unblock" || cmd === "/banfake" || cmd === "/fakeban" || cmd === "/banrefer") {
     const target = Number(args[0]);
     if (!Number.isFinite(target)) {
       await send(chatId, `⚠️ Use: <code>${cmd} &lt;tg_id&gt;</code>`);
@@ -2291,21 +2292,31 @@ async function handleAdminCommand(
       await send(chatId, "⚠️ You cannot block yourself.");
       return true;
     }
-    const block = cmd === "/block";
+    const fake = cmd === "/banfake" || cmd === "/fakeban" || cmd === "/banrefer";
+    const block = cmd === "/block" || fake;
     const reason = args.slice(1).join(" ").trim();
     const { data: u } = await supabase
       .from("cg_users")
-      .select("tg_id")
+      .select("tg_id, balance")
       .eq("tg_id", target)
       .maybeSingle();
     if (!u) {
       await send(chatId, "❌ This user has not started the bot yet.");
       return true;
     }
+    const oldBal = Number((u as any).balance ?? 0);
+    const wipe = fake || (block && (reason.toLowerCase().includes("fake") || args.includes("wipe")));
     await supabase
       .from("cg_users")
-      .update({ blocked: block, pending_action: null })
+      .update({ blocked: block, pending_action: null, ...(wipe ? { balance: 0 } : {}) })
       .eq("tg_id", target);
+    if (wipe && oldBal > 0) {
+      await supabase.from("cg_transactions").insert({
+        tg_id: target,
+        amount: -oldBal,
+        reason: fake ? "Ban: fake referrals — wallet cleared" : "Ban: wallet cleared",
+      });
+    }
     blockCache.set(target, { v: block, t: Date.now() });
     // Stop / resume all campaigns of this advertiser
     const { data: ownAds } = await supabase
@@ -2329,14 +2340,25 @@ async function handleAdminCommand(
     await send(
       chatId,
       block
-        ? `🚫 User <code>${target}</code> is now <b>blocked</b>.\n⏸ Campaigns stopped: <b>${touched}</b>${reason ? `\nReason: ${reason}` : ""}`
+        ? `🚫 User <code>${target}</code> is now <b>blocked</b>.\n⏸ Campaigns stopped: <b>${touched}</b>${wipe ? `\n👛 Wallet cleared: <b>${oldBal.toLocaleString("en-US")} ${COIN}</b> removed` : ""}${fake ? "\n🚩 Reason: fake referrals" : reason ? `\nReason: ${reason}` : ""}`
         : `✅ User <code>${target}</code> is <b>unblocked</b>.\n▶️ Campaigns resumed: <b>${touched}</b>`,
     );
+    const fakeMsg =
+      `🚩 <b>Account banned — fake referrals</b>\n\n` +
+      `⚠️ Our system found that you invited fake or self-created accounts to farm referral rewards. This breaks the Cool Gram rules.\n\n` +
+      `What happened:\n` +
+      `• 🚫 Your account is blocked\n` +
+      `• 👛 Your wallet has been set to <b>0 ${COIN}</b>\n` +
+      `• ⏸ All your campaigns have been stopped\n\n` +
+      `⚠️ <b>Warning:</b> Creating fake accounts again will make this ban permanent and any future balance will be removed as well.\n\n` +
+      `If you believe this is a mistake, contact support.`;
     await tgRaw("sendMessage", {
       chat_id: target,
       parse_mode: "HTML",
       text: block
-        ? `${BLOCKED_MSG}${reason ? `\n\nReason: ${reason}` : ""}`
+        ? fake
+          ? fakeMsg
+          : `${BLOCKED_MSG}${wipe ? `\n\n👛 Your wallet has been set to 0 ${COIN}.` : ""}${reason ? `\n\nReason: ${reason}` : ""}`
         : "✅ <b>You are unblocked</b>\n\nYou can use Cool Gram again. Send /start to continue.",
     });
     return true;
