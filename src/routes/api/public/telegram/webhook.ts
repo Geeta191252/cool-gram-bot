@@ -2343,6 +2343,51 @@ async function handleAdminCommand(
     return true;
   }
 
+  if (
+    cmd === "/balances" ||
+    cmd === "/balanceall" ||
+    cmd === "/wallets" ||
+    cmd === "/allbalance"
+  ) {
+    const minRaw = args[0] ? Number(String(args[0]).replace(/[_,]/g, "")) : NaN;
+    const min = Number.isFinite(minRaw) && minRaw > 0 ? minRaw : 0;
+    let query = supabase
+      .from("cg_users")
+      .select("tg_id, username, first_name, balance, blocked")
+      .order("balance", { ascending: false })
+      .limit(min ? 100 : 50);
+    if (min) query = query.gte("balance", min);
+    const [{ data }, allBals] = await Promise.all([
+      query,
+      supabase.from("cg_users").select("balance"),
+    ]);
+    const list = (data ?? []) as any[];
+    const totalBal = ((allBals ?? []) as any[]).reduce(
+      (a, r) => a + Number(r.balance ?? 0),
+      0,
+    );
+    const totalUsers = ((allBals ?? []) as any[]).length;
+    const rows = list.map(
+      (r, i) =>
+        `${i + 1}. <code>${r.tg_id}</code> ${r.username ? `@${r.username}` : (r.first_name ?? "")}${r.blocked ? " 🚫" : ""} — <b>${Number(r.balance ?? 0).toLocaleString("en-US")}</b> ${COIN}`,
+    );
+    const shown = list.reduce((a, r) => a + Number(r.balance ?? 0), 0);
+    await send(
+      chatId,
+      list.length
+        ? `💰 <b>User balances${min ? ` — ${min.toLocaleString("en-US")} ${COIN}+` : " (richest first)"}</b>\n\n` +
+            `${rows.join("\n")}\n\n` +
+            `${min ? `👥 Matching users: <b>${list.length}</b> of <b>${totalUsers.toLocaleString("en-US")}</b>\n` : ""}` +
+            `📊 Shown coins: <b>${shown.toLocaleString("en-US")} ${COIN}</b>\n` +
+            `🏦 All balances: <b>${totalBal.toLocaleString("en-US")} ${COIN}</b> (${totalUsers.toLocaleString("en-US")} users)\n\n` +
+            `Filter: <code>/balances 10000</code> — only users with 10,000 ${COIN}+`
+        : min
+          ? `🔎 No user has <b>${min.toLocaleString("en-US")} ${COIN}</b> or more.`
+          : "👥 No users yet.",
+    );
+    return true;
+  }
+
   if (cmd === "/refs") {
     const target = Number(args[0]);
     if (!Number.isFinite(target)) {
