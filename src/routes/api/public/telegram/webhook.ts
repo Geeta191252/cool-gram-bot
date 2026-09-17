@@ -1903,6 +1903,7 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/find &lt;name or @username&gt;</code> — find a user's ID\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
       `<code>/usertasks &lt;tg_id&gt;</code> — all campaigns of a user\n` +
+      `<code>/alltasks</code> — campaigns of every user, top advertisers first\n` +
       `<code>/refs &lt;tg_id&gt;</code> — who a user invited (paid / pending)\n` +
       `<code>/refscan</code> — find fake-referral accounts\n` +
       `<code>/setprice ref_daily_max 20</code> — daily referral limit\n` +
@@ -2539,6 +2540,50 @@ async function handleAdminCommand(
     await send(
       chatId,
       `📋 <b>Campaigns by ${(u as any).first_name ?? "User"}</b> (<code>${target}</code>)\nTotal: <b>${list.length}</b> • 🟢 Live: <b>${active}</b>\n\n${lines.join("\n\n")}`,
+    );
+    return true;
+  }
+
+  if (cmd === "/alltasks" || cmd === "/taskusers") {
+    const { data: ads } = await supabase
+      .from("cg_ads")
+      .select("owner_tg, category, is_active")
+      .limit(2000);
+    const all = (ads ?? []) as any[];
+    if (!all.length) {
+      await send(chatId, "📋 No campaigns yet.");
+      return true;
+    }
+    const byOwner = new Map<number, { total: number; live: number; cats: Map<string, number> }>();
+    for (const a of all) {
+      const o = Number(a.owner_tg);
+      if (!byOwner.has(o)) byOwner.set(o, { total: 0, live: 0, cats: new Map() });
+      const e = byOwner.get(o)!;
+      e.total++;
+      if (a.is_active) e.live++;
+      e.cats.set(a.category, (e.cats.get(a.category) ?? 0) + 1);
+    }
+    const top = [...byOwner.entries()].sort((a, b) => b[1].total - a[1].total).slice(0, 25);
+    const ids = top.map(([id]) => id);
+    const { data: users } = await supabase
+      .from("cg_users")
+      .select("tg_id, username, first_name")
+      .in("tg_id", ids);
+    const nameOf = new Map<number, string>();
+    for (const u of (users ?? []) as any[]) {
+      nameOf.set(Number(u.tg_id), u.username ? `@${u.username}` : (u.first_name ?? "User"));
+    }
+    const lines = top.map(([id, e], i) => {
+      const cats = [...e.cats.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([c, n]) => `${(CATEGORY_LABELS[c] ?? c).replace(/^\S+\s/, "")} ×${n}`)
+        .join(", ");
+      const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
+      return `${medal} <b>${nameOf.get(id) ?? "User"}</b> (<code>${id}</code>)\n   📋 ${e.total} task(s) • 🟢 ${e.live} live\n   ${cats}`;
+    });
+    await send(
+      chatId,
+      `📋 <b>All campaigns by user</b>\nTotal campaigns: <b>${all.length}</b> • Advertisers: <b>${byOwner.size}</b>\n(Sorted: most tasks first)\n\n${lines.join("\n\n")}\n\n🔍 Details: <code>/usertasks &lt;tg_id&gt;</code>`,
     );
     return true;
   }
