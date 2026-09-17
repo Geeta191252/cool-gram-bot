@@ -475,27 +475,76 @@ async function getUser(supabase: ReturnType<typeof db>, from: any, startPayload?
   });
 
   if (referrer) {
+    await send(
+      referrer,
+      `👤 <b>New referral joined!</b>\n\nYour bonus of <b>${cfg("referral_bonus")} ${COIN}</b> will be credited once this user completes <b>${cfg("ref_task_gate")}</b> task(s). This protects the program from fake accounts.`,
+    );
+  }
+
+  return { user: created as unknown as CgUser, isNew: true };
+}
+
+// Referral bonus is paid only after the invited user proves to be real
+// (completes tasks), and only inside a daily limit per referrer.
+async function payReferralIfDue(supabase: ReturnType<typeof db>, tgId: number) {
+  try {
+    const { data: me } = await supabase
+      .from("cg_users")
+      .select("tg_id, referred_by, ref_paid")
+      .eq("tg_id", tgId)
+      .maybeSingle();
+    const m = me as any;
+    if (!m || !m.referred_by || m.ref_paid) return;
+
+    const gate = Math.max(1, cfg("ref_task_gate"));
+    const { count: doneCount } = await supabase
+      .from("cg_completions")
+      .select("id", { count: "exact", head: true })
+      .eq("tg_id", tgId);
+    if ((doneCount ?? 0) < gate) return;
+
+    const referrer = Number(m.referred_by);
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: paidToday } = await supabase
+      .from("cg_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("tg_id", referrer)
+      .eq("reason", "Referral bonus")
+      .gte("created_at", since);
+    if ((paidToday ?? 0) >= Math.max(1, cfg("ref_daily_max"))) {
+      await supabase.from("cg_users").update({ ref_paid: true }).eq("tg_id", tgId);
+      await send(
+        referrer,
+        `⚠️ Daily referral limit reached (${cfg("ref_daily_max")} per day). This referral was not paid. Try again tomorrow.`,
+      );
+      return;
+    }
+
     const { data: refUser } = await supabase
       .from("cg_users")
       .select("balance, referral_count")
       .eq("tg_id", referrer)
       .maybeSingle();
-    if (refUser) {
-      await supabase
-        .from("cg_users")
-        .update({
-          balance: (refUser as any).balance + cfg("referral_bonus"),
-          referral_count: (refUser as any).referral_count + 1,
-        })
-        .eq("tg_id", referrer);
-      await supabase
-        .from("cg_transactions")
-        .insert({ tg_id: referrer, amount: cfg("referral_bonus"), reason: "Referral bonus" });
-      await send(referrer, `🎉 New referral joined! +${cfg("referral_bonus")} ${COIN} added to your balance.`);
-    }
-  }
+    if (!refUser) return;
 
-  return { user: created as unknown as CgUser, isNew: true };
+    await supabase.from("cg_users").update({ ref_paid: true }).eq("tg_id", tgId);
+    await supabase
+      .from("cg_users")
+      .update({
+        balance: Number((refUser as any).balance) + cfg("referral_bonus"),
+        referral_count: Number((refUser as any).referral_count) + 1,
+      })
+      .eq("tg_id", referrer);
+    await supabase
+      .from("cg_transactions")
+      .insert({ tg_id: referrer, amount: cfg("referral_bonus"), reason: "Referral bonus" });
+    await send(
+      referrer,
+      `🎉 <b>Referral confirmed!</b> +${cfg("referral_bonus")} ${COIN} added to your balance.`,
+    );
+  } catch {
+    // never break a completion because of referral accounting
+  }
 }
 
 const CATEGORIES: { key: string; label: string }[] = [
