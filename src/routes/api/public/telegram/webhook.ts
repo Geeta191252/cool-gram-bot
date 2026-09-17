@@ -2284,7 +2284,7 @@ async function handleAdminCommand(
     return true;
   }
 
-  if (cmd === "/block" || cmd === "/unblock") {
+  if (cmd === "/block" || cmd === "/unblock" || cmd === "/banfake" || cmd === "/fakeban" || cmd === "/banrefer") {
     const target = Number(args[0]);
     if (!Number.isFinite(target)) {
       await send(chatId, `⚠️ Use: <code>${cmd} &lt;tg_id&gt;</code>`);
@@ -2294,21 +2294,31 @@ async function handleAdminCommand(
       await send(chatId, "⚠️ You cannot block yourself.");
       return true;
     }
-    const block = cmd === "/block";
+    const fake = cmd === "/banfake" || cmd === "/fakeban" || cmd === "/banrefer";
+    const block = cmd === "/block" || fake;
     const reason = args.slice(1).join(" ").trim();
     const { data: u } = await supabase
       .from("cg_users")
-      .select("tg_id")
+      .select("tg_id, balance")
       .eq("tg_id", target)
       .maybeSingle();
     if (!u) {
       await send(chatId, "❌ This user has not started the bot yet.");
       return true;
     }
+    const oldBal = Number((u as any).balance ?? 0);
+    const wipe = fake || (block && (reason.toLowerCase().includes("fake") || args.includes("wipe")));
     await supabase
       .from("cg_users")
-      .update({ blocked: block, pending_action: null })
+      .update({ blocked: block, pending_action: null, ...(wipe ? { balance: 0 } : {}) })
       .eq("tg_id", target);
+    if (wipe && oldBal > 0) {
+      await supabase.from("cg_transactions").insert({
+        tg_id: target,
+        amount: -oldBal,
+        reason: fake ? "Ban: fake referrals — wallet cleared" : "Ban: wallet cleared",
+      });
+    }
     blockCache.set(target, { v: block, t: Date.now() });
     // Stop / resume all campaigns of this advertiser
     const { data: ownAds } = await supabase
