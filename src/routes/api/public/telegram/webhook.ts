@@ -3608,10 +3608,11 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       chatId,
       `📸 <b>Send a screenshot as proof</b>\n\n` +
         `Task: <b>${(ad as any).title}</b>\n` +
-        `Conditions: ${(ad as any).conditions}\n\n` +
-        `Complete the conditions, then send <b>one photo</b> here that shows it is done.\n` +
+        `Conditions: ${(ad as any).conditions ?? "Start the bot and open it"}\n\n` +
+        `Complete the task, then send <b>one photo</b> here that shows it is done (the opened bot chat after you pressed Start).\n` +
         `The advertiser will review it and your reward will be credited after approval.`,
     );
+
     return;
   }
 
