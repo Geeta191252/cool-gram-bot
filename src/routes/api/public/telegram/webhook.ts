@@ -1015,9 +1015,10 @@ async function showTask(
                 : `💲 +${ad.reward.toLocaleString("en-US")} | ${verb}`,
             url: category === "boost" ? boostUrl(ad.link) : ad.link,
           },
-          (ad as any).conditions
+          (ad as any).conditions || category === "bots"
             ? { text: "📸 Send proof", callback_data: `proof:${ad.id}` }
             : { text: "🔄 Check", callback_data: `done:${ad.id}` },
+
         ],
 
   );
