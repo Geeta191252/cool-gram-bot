@@ -2607,9 +2607,9 @@ async function handleAdminCommand(
       supabase.from("cg_ads").select("id, owner_tg, category, is_active, reward, budget_left").limit(2000),
       supabase.from("cg_completions").select("ad_id").limit(20000),
     ]);
-    const all = (ads ?? []) as any[];
+    const all = ((ads ?? []) as any[]).filter((a) => a.is_active === true);
     if (!all.length) {
-      await send(chatId, "📋 No campaigns yet.");
+      await send(chatId, "📋 No live campaigns right now.");
       return true;
     }
     const doneOf = new Map<string, number>();
