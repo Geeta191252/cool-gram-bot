@@ -2604,9 +2604,9 @@ async function handleAdminCommand(
       supabase.from("cg_ads").select("id, owner_tg, category, is_active, reward, budget_left").limit(2000),
       supabase.from("cg_completions").select("ad_id").limit(20000),
     ]);
-    const all = (ads ?? []) as any[];
+    const all = ((ads ?? []) as any[]).filter((a) => a.is_active === true);
     if (!all.length) {
-      await send(chatId, "📋 No campaigns yet.");
+      await send(chatId, "📋 No live campaigns right now.");
       return true;
     }
     const doneOf = new Map<string, number>();
@@ -2647,11 +2647,11 @@ async function handleAdminCommand(
         .map(([c, n]) => `${(CATEGORY_LABELS[c] ?? c).replace(/^\S+\s/, "")} ×${n}`)
         .join(", ");
       const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
-      return `${medal} <b>${nameOf.get(id) ?? "User"}</b> (<code>${id}</code>)\n   📋 ${e.total} task(s) • 🟢 ${e.live} live\n   ✖️ Quantity: <b>${e.qty}x</b> • ✅ Done: ${e.done}\n   ${cats}`;
+      return `${medal} <b>${nameOf.get(id) ?? "User"}</b> (<code>${id}</code>)\n   🟢 ${e.total} live task(s)\n   ✖️ Quantity: <b>${e.qty}x</b> • ✅ Done: ${e.done}\n   ${cats}`;
     });
     await send(
       chatId,
-      `📋 <b>All campaigns by user</b>\nTotal campaigns: <b>${all.length}</b> • Advertisers: <b>${byOwner.size}</b>\nTotal ordered quantity: <b>${grandQty}x</b>\n(Sorted: most tasks first)\n\n${lines.join("\n\n")}\n\n🔍 Details: <code>/usertasks &lt;tg_id&gt;</code>`,
+      `🟢 <b>Live campaigns by user</b>\nLive campaigns: <b>${all.length}</b> • Advertisers: <b>${byOwner.size}</b>\nTotal ordered quantity: <b>${grandQty}x</b>\n(Sorted: most tasks first)\n\n${lines.join("\n\n")}\n\n🔍 Details: <code>/usertasks &lt;tg_id&gt;</code>`,
     );
     return true;
   }
