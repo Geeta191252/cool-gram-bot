@@ -3687,6 +3687,7 @@ async function handleCallbackInner(supabase: ReturnType<typeof db>, cb: any) {
       await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Already reviewed." });
       return;
     }
+    await payReferralIfDue(supabase, worker);
     const { data: wu } = await supabase
       .from("cg_users")
       .select("balance")
