@@ -2426,6 +2426,38 @@ async function handleAdminCommand(
     return true;
   }
 
+  if (cmd === "/usertasks" || cmd === "/tasks") {
+    const target = Number(args[0]);
+    if (!Number.isFinite(target)) {
+      await send(chatId, "⚠️ Use: <code>/usertasks &lt;tg_id&gt;</code>");
+      return true;
+    }
+    const { data: ads } = await supabase
+      .from("cg_ads")
+      .select("id, title, category, reward, budget_left, is_active, created_at")
+      .eq("owner_tg", target)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    const list = (ads ?? []) as any[];
+    const u = await getUser(supabase, target);
+    if (!list.length) {
+      await send(chatId, `📋 <b>${u.first_name ?? "User"}</b> (<code>${target}</code>) has no campaigns.`);
+      return true;
+    }
+    const lines = list.map((a, i) => {
+      const label = CATEGORY_LABELS[a.category] ?? a.category;
+      const status = a.is_active ? "🟢 Live" : "🔴 Off";
+      const left = a.reward > 0 ? Math.floor(Number(a.budget_left) / Number(a.reward)) : 0;
+      return `${i + 1}. ${status} ${label} — <b>${a.title}</b>\n   💰 ${Number(a.reward).toLocaleString("en-US")} ${COIN} • ${left} left`;
+    });
+    const active = list.filter((a) => a.is_active).length;
+    await send(
+      chatId,
+      `📋 <b>Campaigns by ${u.first_name ?? "User"}</b> (<code>${target}</code>)\nTotal: <b>${list.length}</b> • 🟢 Live: <b>${active}</b>\n\n${lines.join("\n\n")}`,
+    );
+    return true;
+  }
+
   if (cmd === "/deposits") {
     const { data } = await supabase
       .from("cg_star_payments")
