@@ -1899,6 +1899,10 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/unblock &lt;tg_id&gt;</code> — unblock a user\n` +
       `<code>/blocked</code> — list blocked users\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
+      `<code>/refs &lt;tg_id&gt;</code> — who a user invited (paid / pending)\n` +
+      `<code>/refscan</code> — find fake-referral accounts\n` +
+      `<code>/setprice ref_daily_max 20</code> — daily referral limit\n` +
+      `<code>/setprice ref_task_gate 1</code> — tasks needed before bonus\n` +
       `<code>/deposits</code> — last Stars deposits\n` +
       `<code>/setprice withdraw &lt;amount&gt;</code> — minimum withdrawal\n` +
       `<code>/withdrawoff</code> / <code>/withdrawon</code> — close or open withdrawals\n` +
