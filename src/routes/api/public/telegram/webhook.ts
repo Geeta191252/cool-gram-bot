@@ -1899,6 +1899,7 @@ async function showAdminPanel(supabase: ReturnType<typeof db>, chatId: number) {
       `<code>/block &lt;tg_id&gt; [reason]</code> — block a user from the bot\n` +
       `<code>/unblock &lt;tg_id&gt;</code> — unblock a user\n` +
       `<code>/blocked</code> — list blocked users\n` +
+      `<code>/balances</code> — every user's balance (richest first)\n` +
       `<code>/find &lt;name or @username&gt;</code> — find a user's ID\n` +
       `<code>/userinfo &lt;tg_id&gt;</code> — user details\n` +
       `<code>/usertasks &lt;tg_id&gt;</code> — all campaigns of a user\n` +
