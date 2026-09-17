@@ -2549,16 +2549,33 @@ async function handleAdminCommand(
       await send(chatId, `📋 <b>${(u as any).first_name ?? "User"}</b> (<code>${target}</code>) has no campaigns.`);
       return true;
     }
+    const { data: comps } = await supabase
+      .from("cg_completions")
+      .select("ad_id")
+      .in(
+        "ad_id",
+        list.map((a) => a.id),
+      );
+    const doneOf = new Map<string, number>();
+    for (const c of (comps ?? []) as any[]) {
+      doneOf.set(String(c.ad_id), (doneOf.get(String(c.ad_id)) ?? 0) + 1);
+    }
+    let sumQty = 0;
+    let sumDone = 0;
     const lines = list.map((a, i) => {
       const label = CATEGORY_LABELS[a.category] ?? a.category;
       const status = a.is_active ? "🟢 Live" : "🔴 Off";
       const left = a.reward > 0 ? Math.floor(Number(a.budget_left) / Number(a.reward)) : 0;
-      return `${i + 1}. ${status} ${label} — <b>${a.title}</b>\n   💰 ${Number(a.reward).toLocaleString("en-US")} ${COIN} • ${left} left`;
+      const done = doneOf.get(String(a.id)) ?? 0;
+      const qty = done + left;
+      sumQty += qty;
+      sumDone += done;
+      return `${i + 1}. ${status} ${label} — <b>${a.title}</b>\n   ✖️ Quantity: <b>${qty}x</b> • ✅ Done: ${done} • ⏳ Left: ${left}\n   💰 ${Number(a.reward).toLocaleString("en-US")} ${COIN} each`;
     });
     const active = list.filter((a) => a.is_active).length;
     await send(
       chatId,
-      `📋 <b>Campaigns by ${(u as any).first_name ?? "User"}</b> (<code>${target}</code>)\nTotal: <b>${list.length}</b> • 🟢 Live: <b>${active}</b>\n\n${lines.join("\n\n")}`,
+      `📋 <b>Campaigns by ${(u as any).first_name ?? "User"}</b> (<code>${target}</code>)\nTotal: <b>${list.length}</b> • 🟢 Live: <b>${active}</b>\nOrdered quantity: <b>${sumQty}x</b> • ✅ Done: <b>${sumDone}</b> • ⏳ Left: <b>${sumQty - sumDone}</b>\n\n${lines.join("\n\n")}`,
     );
     return true;
   }
