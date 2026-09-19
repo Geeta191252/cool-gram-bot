@@ -2005,7 +2005,33 @@ async function runBroadcast(
     );
     return;
   }
-  await send(chatId, `📡 Sending to <b>${rows.length}</b> ${target === "users" ? "users" : "chats"}…`);
+  // Live status message — edited in place as the broadcast progresses.
+  const statusRes: any = await tgRaw("sendMessage", {
+    chat_id: chatId,
+    text: `📡 <b>Broadcast started</b>\n\n⏳ 0 / ${rows.length}\n✅ Sent: 0\n❌ Failed: 0`,
+    parse_mode: "HTML",
+  });
+  const statusMsgId = statusRes?.result?.message_id as number | undefined;
+
+  const progressBar = (done: number, total: number): string => {
+    const blocks = 10;
+    const filled = Math.round((done / Math.max(1, total)) * blocks);
+    return "🟩".repeat(filled) + "⬜".repeat(blocks - filled);
+  };
+  const statusText = (done: number, finished = false): string =>
+    `📡 <b>Broadcast ${finished ? "finished" : "live"}</b>\n\n` +
+    `${progressBar(done, rows.length)} ${done}/${rows.length} (${Math.round((done / Math.max(1, rows.length)) * 100)}%)\n\n` +
+    `✅ Sent: <b>${sent}</b>\n❌ Failed: <b>${failed.length}</b>\n` +
+    (finished ? "" : `⏳ Remaining: <b>${rows.length - done}</b>`);
+  const updateStatus = async (done: number, finished = false) => {
+    if (!statusMsgId) return;
+    await tgRaw("editMessageText", {
+      chat_id: chatId,
+      message_id: statusMsgId,
+      text: statusText(done, finished),
+      parse_mode: "HTML",
+    });
+  };
 
   let sent = 0;
   const failed: string[] = [];
@@ -2032,8 +2058,14 @@ async function runBroadcast(
       if (res?.ok) sent++;
       else failed.push(batch[idx]!.title);
     });
+    // Refresh the live status every 2 batches (or on the last batch).
+    const done = i + batch.length;
+    if ((i / batchSize) % 2 === 1 || done >= rows.length) {
+      await updateStatus(done, done >= rows.length);
+    }
   }
 
+  await updateStatus(rows.length, true);
   await send(
     chatId,
     `📡 <b>Broadcast finished</b>\n\n✅ Sent: <b>${sent}</b>\n❌ Failed: <b>${failed.length}</b>` +
