@@ -2057,10 +2057,22 @@ async function runBroadcast(
             }),
       ),
     );
+    const blockedIds: number[] = [];
     results.forEach((res: any, idx) => {
-      if (res?.ok) sent++;
-      else failed.push(batch[idx]!.title);
+      if (res?.ok) {
+        sent++;
+      } else {
+        failed.push(batch[idx]!.title);
+        // Users who blocked the bot or deleted their account — stop messaging them in future.
+        const desc = String(res?.description ?? "");
+        if (target === "users" && /blocked|deactivated|user not found|chat not found/i.test(desc)) {
+          blockedIds.push(batch[idx]!.chat_id);
+        }
+      }
     });
+    if (blockedIds.length) {
+      await supabase.from("cg_users").update({ blocked: true }).in("tg_id", blockedIds);
+    }
     // Refresh the live status every 2 batches (or on the last batch).
     const done = i + batch.length;
     if ((i / batchSize) % 2 === 1 || done >= rows.length) {
